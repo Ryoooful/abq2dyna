@@ -6,11 +6,11 @@ output_path = r"C:\Users\1080045106\Desktop\dynaa.k"
 
 class Node:
     def __init__(self):
-        self.id = []
-        self.x  = []
-        self.y  = []
-        self.z  = []
-        self.bool = False
+        self.node_id    = []
+        self.x          = []
+        self.y          = []
+        self.z          = []
+        self.bool       = False
 
     def isChecked(self, line):
         if '*Node' == line:
@@ -19,97 +19,144 @@ class Node:
             self.bool = False
 
     def append(self, spdata):
-        if '*' in spdata[0]:
-            self.bool = False
-        
         if self.bool:
-            self.id += [int(spdata[0])]
+            self.node_id += [int(spdata[0])]
             self.x  += [float(spdata[1]) * 1000]
             self.y  += [float(spdata[2]) * 1000]
             self.z  += [float(spdata[3]) * 1000]
 
-    def dataframe(self):
-        df = pd.DataFrame(index=self.id, data={'nid':self.id, 'x':self.x, 'y':self.y, 'z':self.z}, columns=['nid', 'x', 'y', 'z'])
+    def df_node_id(self):
+        df = pd.DataFrame(  index=self.node_id, 
+                            data={'node_id':self.node_id, 'x':self.x, 'y':self.y, 'z':self.z}, 
+                            columns=['node_id', 'x', 'y', 'z'])
         return df
 
 
 class Element:
     def __init__(self):
-        self.eid            = []
-        self.element_names  = []
-        self.array_nid      = []
-        self.temp_eid       = []
-        self.nid            = []
-        self.bool           = False
+        self.element_id         = []
+        self.element_types      = []
+        self.node_id            = []
+        self.temp_element_id    = []
+        self.temp_node_id       = []
+        self.bool               = False
 
     def isChecked(self, spdata):
+        self.bool = False
         if '*Element' == spdata[0]:
             self.bool = True
-            self.element_name = spdata[1].split("=")[1].strip()
-        else:
-            self.bool = False
+            self.element_type = str(spdata[1].split("=")[1].strip())
 
     def append(self, spdata):
         if self.bool:
-            self.id = int(spdata[0])
-            self.eid            += [self.id]
-            self.element_names  += [self.element_name]
+            self.temp_id = int(spdata[0])
+            self.element_id     += [int(self.temp_id)]
+            self.element_types  += [self.element_type]
             temp = []
             for st in spdata[1:]:
-                self.temp_eid   += [self.id]
-                self.nid        += [int(st.strip())]
-                temp            += [int(st.strip())]  
-            self.array_nid += [temp]
-            
-
+                self.temp_element_id    += [int(self.temp_id)]
+                self.node_id            += [int(st)]
+                temp                    += [int(st)]  
+            self.temp_node_id   += [temp]
     
     def df_element_id(self):
-        df = pd.DataFrame(index=self.eid, data={'eid':self.eid, 'element_name':self.element_names, 'nid':self.array_nid}, columns=['eid', 'element_name', 'nid'])
+        df = pd.DataFrame(  index=self.element_id, 
+                            data={'element_id':self.element_id, 'element_type':self.element_types, 'node_ids':self.temp_node_id}, 
+                            columns=['element_id', 'element_type', 'node_ids'])
         return df
     
-    def df_element_node(self):
-        df = pd.DataFrame(data={'eid':self.temp_eid, 'nid':self.nid}, columns=['eid', 'nid'])
+    def df_element_component(self):
+        df = pd.DataFrame(  data={'eid':self.element_id, 'nid':self.node_id}, 
+                            columns=['element_id', 'node_id'])
         return df
 
 
-class Segment:
+class Elset:
     def __init__(self):
-        self.bool = False
-        self.segment_types          = []
-        self.segment_names          = []
-        self.instance_names         = []
-        self.internals              = []
-        self.generates              = []
+        self.elset_names    = []
+        self.instance_names = []
+        self.internals      = []
+        self.generates      = []
+        self.temp_names     = []
+        self.element_id        = []
+        self.bool           = False
 
-        self.temp_segment_names     = []
-        self.nid                    = []
-
-        self.generate = False
-        
     def isChecked(self, spdata):
-        if self.bool:
-            self.bool = False
-
-        if '*Nset' == spdata[0].strip() or '*Elset' == spdata[0].strip():
+        self.elset_name      = ""
+        self.instance_name  = ""
+        self.internal       = False
+        self.generate       = False
+        self.bool           = False
+        if '*Elset' == spdata[0].strip():
             self.bool = True
-            self.segment_name = ""
-            self.instance_name = ""
-            self.internal = False
-            self.generate = False
-
-            self.segment_type = spdata[0].strip()
-            for sp in spdata[1:]:                    
-                if "nset=" in sp or "elset=" in sp:
-                    self.segment_name = sp.split("=")[1]
+            for sp in spdata[1:]:
+                if "elset=" in sp:
+                    self.elset_name = str(sp.split("=")[1])
                 elif "instance=" in sp:
-                    self.instance_name = sp.split("=")[1]
+                    self.instance_name = str(sp.split("=")[1])
                 elif sp.strip() =="internal":
                     self.internal = True
                 elif sp.strip() =="generate":
                     self.generate = True
 
-            self.segment_names  += [self.segment_name]
-            self.segment_types  += [self.segment_type]
+            self.elset_names    += [str(self.elset_name)]
+            self.instance_names += [str(self.instance_name)]
+            self.internals      += [self.internal]
+            self.generates      += [self.generate]
+
+    def append(self, spdata):
+        if self.bool:
+            if self.generate:
+                for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2])):
+                    self.temp_names     += [str(self.elset_name)]
+                    self.element_id        += [int(st)]
+            else:
+                for st in spdata:
+                    if st.strip() != "":
+                        self.temp_names     += [str(self.elset_name)]
+                        self.element_id     += [int(st)]
+
+    def df_elset_name(self):
+        df = pd.DataFrame(  index=self.elset_names, 
+                            data={'elset_name':self.elset_names, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
+                            columns=['elset_name', 'instance_name', 'internal', 'generate'])
+        return df
+
+    def df_elset_component(self):
+        df = pd.DataFrame(  data={'elset_name':self.temp_names , 'element_id':self.element_id}, 
+                            columns=['elset_name', 'element_id'])
+        return df
+
+
+class Nset:
+    def __init__(self):
+        self.nset_names     = []
+        self.instance_names = []
+        self.internals      = []
+        self.generates      = []
+        self.temp_names     = []
+        self.node_id        = []
+        self.bool           = False
+        
+    def isChecked(self, spdata):
+        self.nset_name      = ""
+        self.instance_name  = ""
+        self.internal       = False
+        self.generate       = False
+        self.bool           = False
+        if '*Nset' == spdata[0].strip():
+            self.bool = True
+            for sp in spdata[1:]:                    
+                if "nset=" in sp:
+                    self.nset_name = str(sp.split("=")[1])
+                elif "instance=" in sp:
+                    self.instance_name = str(sp.split("=")[1])
+                elif sp.strip() =="internal":
+                    self.internal = True
+                elif sp.strip() =="generate":
+                    self.generate = True
+
+            self.nset_names     += [self.nset_name]
             self.instance_names += [self.instance_name]
             self.internals      += [self.internal]
             self.generates      += [self.generate]
@@ -117,52 +164,110 @@ class Segment:
     def append(self, spdata):
         if self.bool:
             if self.generate:
-                for st in range(int(spdata[0]), int(spdata[1]) + 1, int(spdata[2])):
-                    self.temp_segment_names += [self.segment_name]
-                    self.nid                += [st]
-
+                for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2])):
+                    self.temp_names     += [self.nset_name]
+                    self.node_id        += [int(st)]
             else:
                 for st in spdata:
                     if st.strip() != "":
-                        self.temp_segment_names += [self.segment_name]
-                        self.nid                += [st]
+                        self.temp_names += [self.nset_name]
+                        self.node_id    += [str(st)]
 
-    def df_segment_name(self):
-        df = pd.DataFrame(index=self.segment_names, 
-                            data={'segment_name':self.segment_names, 'segment_type':self.segment_types, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
-                            columns=['segment_name', 'segment_type', 'instance_name', 'internal', 'generate'])
+    def df_nset_name(self):
+        df = pd.DataFrame(  index=self.nset_names, 
+                            data={'nset_name':self.nset_names, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
+                            columns=['nset_name', 'instance_name', 'internal', 'generate'])
         return df
 
-    def df_segment_node(self):
-        df = pd.DataFrame(data={'segment_name':self.temp_segment_names , 'id':self.nid}, 
-                            columns=['segment_name', 'id'])
+    def df_nset_component(self):
+        df = pd.DataFrame(  data={'nset_name':self.temp_names , 'node_id':self.node_id}, 
+                            columns=['nset_name', 'node_id'])
         return df
 
 class Solid:
     def __init__(self):
-        self.segment_id     = []
-        self.segment_names  = []
+        self.solid_id       = []
+        self.elset_names    = []
         self.material_names = []
 
     def isChecked(self, spdata):
         if '*Solid Section' == spdata[0].strip():
-            self.segment_id             += [len(self.segment_id) + 1]
+            self.solid_id             += [int(len(self.solid_id) + 1)]
             for sp in spdata[1:]:                    
-                if "nset=" in sp or "elset=" in sp:
-                    self.segment_names  += [sp.split("=")[1]]
+                if "elset=" in sp:
+                    self.elset_names  += [str(sp.split("=")[1])]
                 elif "material=" in sp:
-                    self.material_names += [sp.split("=")[1]]
+                    self.material_names += [str(sp.split("=")[1])]
 
-    def df_solid_name(self):
-        df = pd.DataFrame(index=self.segment_id, data={'segment_id':self.segment_id, 'segment_name':self.segment_names, 'material_name':self.material_names}, 
-                            columns=['segment_id', 'segment_name', 'material_name'])
+    def df_solid_id(self):
+        df = pd.DataFrame(  index=self.solid_id, 
+                            data={'solid_id':self.solid_id, 'elset_name':self.elset_names, 'material_name':self.material_names}, 
+                            columns=['solid_id', 'elset_name', 'material_name'])
         return df
+
+
+
+class Surface:
+    def __init__(self):
+        self.bool           = False
+        self.surface_id     = []
+        self.surface_names  = []
+        self.surface_types  = []
+        self.temp_names     = []
+        self.elset_name     = []
+        self.identification = []
+    def isChecked(self, spdata):
+        self.bool = False
+        if '*Surface' == spdata[0].strip():
+            self.bool = True
+            self.surface_name   = ""
+            self.surface_type   = ""
+            for sp in spdata[1:]:
+                if "type=" in sp:
+                    self.surface_type = str(sp.split("=")[1])
+                elif "name=" in sp:
+                    self.surface_name = str(sp.split("=")[1])
+            self.sid            = int(len(self.surface_id)+1)
+            self.surface_id     += [self.sid]
+            self.surface_names  += [self.surface_name]
+            self.surface_types  += [self.surface_type]
+    
+    def append(self, spdata):
+        if self.bool:
+            self.temp_names     += [self.surface_name]
+            self.elset_name     += [str(spdata[0])]
+            self.identification += [str(spdata[1])]
+
+    def df_surface_name(self):
+        df = pd.DataFrame(  index=self.surface_id,
+                            data={'surface_name':self.surface_names, 'surface_id':self.surface_id, 'surface_type':self.surface_types}, 
+                            columns=['surface_name', 'surface_id', 'surface_type'])
+        return df
+
+    def df_surface_component(self):
+        df = pd.DataFrame(  data={'surface_name':self.temp_names, 'elset_name':self.elset_name, 'identification':self.identification}, 
+                            columns=['surface_name', 'elset_name', 'identification'])
+        return df
+    
+def get_node_on_surface(element_type, identification, node_ids):
+    if element_type == "C3D4":
+        if identification == "S1":
+            return [node_ids[0], node_ids[1], node_ids[2]]
+        elif identification == "S2":
+            return [node_ids[0], node_ids[3] ,node_ids[1]]
+        elif identification == "S3":
+            return [node_ids[1], node_ids[3], node_ids[2]]
+        elif identification == "S4":
+            return [node_ids[2], node_ids[3], node_ids[0]]
+
 
 
 node = Node()
 element = Element()
-segment = Segment()
+nset = Nset()
+elset = Elset()
 solid = Solid()
+surface = Surface()
 with open(input_path) as f:
     lines = [s.strip() for s in  f.readlines()]
     for line in lines:
@@ -174,62 +279,83 @@ with open(input_path) as f:
         if "*" in line:
             node.isChecked(line)
             element.isChecked(spdata)
-            segment.isChecked(spdata)
+            nset.isChecked(spdata)
+            elset.isChecked(spdata)
             solid.isChecked(spdata)
+            surface.isChecked(spdata)
         else:
             node.append(spdata)
             element.append(spdata)
-            segment.append(spdata)
-            
-nodes = node.dataframe()
-elements = element.df_element_id()
-segments = segment.df_segment_node()
-solids = solid.df_solid_name()
+            nset.append(spdata)
+            elset.append(spdata)
+            surface.append(spdata)
 
 
-temp_elements = pd.merge(solids, segments, on='segment_name', how='left').drop(columns='segment_name').drop(columns='material_name').rename(columns={'id':'eid'}).rename(columns={'segment_id':'pid'})
-temp_elements['eid'] = temp_elements['eid'].astype(int)
-temp = pd.merge(temp_elements, elements, on='eid')
 
-#print(temp)
 
 with open(output_path, mode='w') as f:
 
-    for index, row in solids.iterrows():
-        f.write("*SECTION_SOLID_TITLE\n")
-        f.write(str(row[1]) + "\n")
-        f.write('{0: > #10}'.format(index)) #secid
-        f.write('{0: > #10}'.format(10))        #elform メッシュ種類
-        f.write("\n")
+    df_solid_id = solid.df_solid_id()
 
-    for index, row in solids.iterrows():
-        seid = index
+    for index, row in df_solid_id.iterrows():
+        f.write("*SECTION_SOLID_TITLE\n")
+        f.write(str(row.elset_name) + "\n")
+        f.write('{0: > #10}'.format(row.solid_id))      #secid
+        f.write('{0: > #10}'.format(10))                #elform メッシュ種類
+        f.write("\n")
+    
+    for index, row in df_solid_id.iterrows():
         f.write("*PART\n")
-        f.write(str(row[1]) + "\n")
-        f.write('{0: > #10}'.format(seid))
-        f.write('{0: > #10}'.format(seid))
+        f.write(str(row.elset_name) + "\n")
+        f.write('{0: > #10}'.format(row.solid_id))
+        f.write('{0: > #10}'.format(row.solid_id))
         f.write('{0: > #10}'.format(0))
         f.write("\n")
-
+    
     f.write("*Node\n")
-    for index, row in nodes.iterrows():
-        f.write('{0: > #8}'.format(int(row[0])))
+    df_node_id = node.df_node_id()
+    for index, row in df_node_id.iterrows():
+        f.write('{0: > #8}'.format(int(row.node_id)))
         for st in row[1:]:
             f.write('{0:0< #16f}'.format(float(st)))
         f.write("\n")
     
+    
     f.write("*ELEMENT_SOLID\n")
-    for index, row in temp.iterrows():
-        f.write('{0: > #8}'.format(row.eid))
-        f.write('{0: > #8}'.format(row.pid))
+    df_elset_component = elset.df_elset_component()
+    df_element_id = element.df_element_id()
+    df_solid_component = pd.merge(df_solid_id, df_elset_component, on='elset_name', how='left')
+    df_part_component = pd.merge(df_solid_component, df_element_id, on='element_id', how='left')
+
+    for index, row in df_part_component.iterrows():
+        f.write('{0: > #8}'.format(row.element_id))
+        f.write('{0: > #8}'.format(row.solid_id))
         f.write("\n")
-        for st in row.nid:
+        for st in row.node_ids:
             f.write('{0: > #8}'.format(st))
-        f.write('{0: > #8}'.format(row[3][3]))
-        f.write('{0: > #8}'.format(row[3][3]))
-        f.write('{0: > #8}'.format(row[3][3]))
-        f.write('{0: > #8}'.format(row[3][3]))
+
+        if len(row.node_ids) < 8:
+            for n in range(len(row.node_ids)+1, 9):
+                f.write('{0: > #8}'.format(row.node_ids[len(row.node_ids)-1]))
         f.write("\n")
+    
+    df_surface_name = surface.df_surface_name()
+    df_surface_component = surface.df_surface_component()
+    df_temptable = pd.merge(df_surface_component, df_elset_component, on='elset_name', how='left')
+    df_segment_component = pd.merge(df_temptable, df_element_id, on='element_id', how='left')
+
+    for index, sid in df_surface_name.iterrows():
+        f.write("*SET_SEGMENT\n")
+        f.write('{0: > #10}'.format(sid.surface_id))
+        f.write("\n")
+        for index, row in df_segment_component[df_segment_component['surface_name'] == sid.surface_name].iterrows():
+            temp_nodes = get_node_on_surface(row.element_type.strip(), row.identification.strip(), row.node_ids)
+            for st in temp_nodes:
+                f.write('{0: > #10}'.format(st))
+            if len(temp_nodes) < 4:
+                for n in range(len(temp_nodes), 4):
+                    f.write('{0: > #10}'.format(temp_nodes[len(temp_nodes) - 1]))
+            f.write("\n")
 
     f.write("*END")
         
