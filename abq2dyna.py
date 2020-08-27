@@ -1,7 +1,7 @@
 import pandas as pd
 
 input_path = r"C:\Temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dynaa.k"
+output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.k"
 
 
 class Node:
@@ -239,7 +239,7 @@ class Surface:
             self.identification += [str(spdata[1])]
 
     def df_surface_name(self):
-        df = pd.DataFrame(  index=self.surface_id,
+        df = pd.DataFrame(  index=self.surface_names,
                             data={'surface_name':self.surface_names, 'surface_id':self.surface_id, 'surface_type':self.surface_types}, 
                             columns=['surface_name', 'surface_id', 'surface_type'])
         return df
@@ -248,7 +248,47 @@ class Surface:
         df = pd.DataFrame(  data={'surface_name':self.temp_names, 'elset_name':self.elset_name, 'identification':self.identification}, 
                             columns=['surface_name', 'elset_name', 'identification'])
         return df
-    
+
+class Tie:
+    def __init__(self):
+        self.bool               = False
+        self.tie_id             = []
+        self.tie_names          = []
+        self.adjust             = []
+        self.slave_surfaces     = []
+        self.master_surfaces    = []
+
+    def isChecked(self, spdata):
+        self.bool = False
+        if '*Tie' == spdata[0].strip():
+            self.bool           = True
+            self.tie_name       = ""
+            self.adjust_bool    = False
+            for sp in spdata[1:]:
+                if "name=" in sp:
+                    self.tie_name = str(sp.split("=")[1])
+                elif "adjust_bool=" in sp:
+                    if str(sp.split("=")[1]) == "yes":
+                        self.adjust_bool = True
+            self.tie_id         +=  [len(self.tie_id) + 1]
+            self.tie_names      +=  [self.tie_name]
+            self.adjust    +=  [self.adjust_bool]
+
+    def append(self, spdata):
+        if self.bool:
+            self.slave_surfaces     += [spdata[0].strip()]
+            self.master_surfaces    += [spdata[1].strip()]
+            self.bool = False
+
+    def df_tie_name(self):
+        df = pd.DataFrame(  index = self.tie_names,
+                            data={'tie_id':self.tie_id, 'tie_name':self.tie_names, 'adjust':self.adjust, 'slave_surface':self.slave_surfaces, 'master_surface':self.master_surfaces}, 
+                            columns=['tie_id', 'tie_name', 'adjust', 'slave_surface', 'master_surface'])
+        return df
+
+
+
+
 def get_node_on_surface(element_type, identification, node_ids):
     if element_type == "C3D4":
         if identification == "S1":
@@ -268,6 +308,7 @@ nset = Nset()
 elset = Elset()
 solid = Solid()
 surface = Surface()
+tie = Tie()
 with open(input_path) as f:
     lines = [s.strip() for s in  f.readlines()]
     for line in lines:
@@ -283,12 +324,14 @@ with open(input_path) as f:
             elset.isChecked(spdata)
             solid.isChecked(spdata)
             surface.isChecked(spdata)
+            tie.isChecked(spdata)
         else:
             node.append(spdata)
             element.append(spdata)
             nset.append(spdata)
             elset.append(spdata)
             surface.append(spdata)
+            tie.append(spdata)
 
 
 
@@ -300,8 +343,8 @@ with open(output_path, mode='w') as f:
     for index, row in df_solid_id.iterrows():
         f.write("*SECTION_SOLID_TITLE\n")
         f.write(str(row.elset_name) + "\n")
-        f.write('{0: > #10}'.format(row.solid_id))      #secid
-        f.write('{0: > #10}'.format(10))                #elform メッシュ種類
+        f.write('{0: > #10}'.format(row.solid_id))      
+        f.write('{0: > #10}'.format(10))                
         f.write("\n")
     
     for index, row in df_solid_id.iterrows():
@@ -344,6 +387,8 @@ with open(output_path, mode='w') as f:
     df_temptable = pd.merge(df_surface_component, df_elset_component, on='elset_name', how='left')
     df_segment_component = pd.merge(df_temptable, df_element_id, on='element_id', how='left')
 
+    df_tie_name = tie.df_tie_name()
+
     for index, sid in df_surface_name.iterrows():
         f.write("*SET_SEGMENT\n")
         f.write('{0: > #10}'.format(sid.surface_id))
@@ -357,8 +402,17 @@ with open(output_path, mode='w') as f:
                     f.write('{0: > #10}'.format(temp_nodes[len(temp_nodes) - 1]))
             f.write("\n")
 
+    for index, row in df_tie_name.iterrows():
+        f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
+        f.write('{0: > #10}'.format(row.tie_id))
+        f.write("\n")
+        f.write('{0: > #10}'.format(df_surface_name.loc[row.slave_surface]['surface_id']))
+        f.write('{0: > #10}'.format(df_surface_name.loc[row.master_surface]['surface_id']))
+        f.write('{0: > #10}'.format(0))
+        f.write('{0: > #10}'.format(0))
+        f.write("\n")
+        f.write('{0: > #50}'.format(20))
+        f.write("\n")
     f.write("*END")
         
-        
-
 
