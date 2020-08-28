@@ -1,7 +1,7 @@
 import pandas as pd
 
 input_path = r"C:\Temp\abq2dyna.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.k"
+output_path = r"C:\Users\1080045106\Desktop\dyna.k"
 
 
 class Node:
@@ -287,18 +287,56 @@ class Tie:
         return df
 
 
+class Boundary:
+    def __init__(self):
+        self.bool               = False
+        self.boundary_names     = []
+        self.amplitude_names    = []
+        self.u1                 = []
+        self.u2                 = []
+        self.u3                 = []
+        self.ur1                = []
+        self.ur2                = []
+        self.ur3                = []
+        self.u1_value           = []
+        self.u2_value           = []
+        self.u3_value           = []
+        self.ur1_value          = []
+        self.ur2_value          = []
+        self.ur3_value          = []
+
+
+    def isChecked(self, spdata):
+        self.bool = False
+        if '*Boundary' == spdata[0].strip():
+            self.bool              = True
+            self.amplitude_name    = ""
+            for sp in spdata[1:]:
+                if "amplitude=" in sp:
+                    self.amplitude_name = str(sp.split("=")[1])
+
+            self.amplitude_names      +=  [self.amplitude_name]
+
+
+class Coupling:
+    def __init__(self):
+        self.bool = False
+        
+
+
+
 
 
 def get_node_on_surface(element_type, identification, node_ids):
     if element_type == "C3D4":
         if identification == "S1":
-            return [node_ids[0], node_ids[1], node_ids[2]]
+            return [node_ids[2], node_ids[1], node_ids[0]]
         elif identification == "S2":
-            return [node_ids[0], node_ids[3] ,node_ids[1]]
+            return [node_ids[1], node_ids[3] ,node_ids[0]]
         elif identification == "S3":
-            return [node_ids[1], node_ids[3], node_ids[2]]
+            return [node_ids[2], node_ids[3], node_ids[1]]
         elif identification == "S4":
-            return [node_ids[2], node_ids[3], node_ids[0]]
+            return [node_ids[0], node_ids[3], node_ids[2]]
 
 
 
@@ -311,7 +349,7 @@ surface = Surface()
 tie = Tie()
 with open(input_path) as f:
     lines = [s.strip() for s in  f.readlines()]
-    for line in lines:
+    for index, line in enumerate(lines):
         if "**" in line:
             continue
 
@@ -363,7 +401,6 @@ with open(output_path, mode='w') as f:
             f.write('{0:0< #16f}'.format(float(st)))
         f.write("\n")
     
-    
     f.write("*ELEMENT_SOLID\n")
     df_elset_component = elset.df_elset_component()
     df_element_id = element.df_element_id()
@@ -413,6 +450,11 @@ with open(output_path, mode='w') as f:
         f.write("\n")
         f.write('{0: > #50}'.format(20))
         f.write("\n")
+
+
+
+
+
+
     f.write("*END")
-        
 
