@@ -170,8 +170,16 @@ class Nset:
             else:
                 for st in spdata:
                     if st.strip() != "":
-                        self.temp_names += [self.nset_name]
-                        self.node_id    += [str(st)]
+                        try:
+                            id = int(st.strip())
+                            self.temp_names += [self.nset_name]
+                            self.node_id    += [id]
+                        except:
+                            df = pd.DataFrame(  data={'nset_name':self.temp_names , 'node_id':self.node_id}, 
+                                                columns=['nset_name', 'node_id'])
+                            for index, row in df[df['nset_name'] == st.strip()].iterrows():
+                                self.temp_names += [self.nset_name]
+                                self.node_id    += [int(row.node_id)]
 
     def df_nset_name(self):
         df = pd.DataFrame(  index=self.nset_names, 
@@ -183,6 +191,7 @@ class Nset:
         df = pd.DataFrame(  data={'nset_name':self.temp_names , 'node_id':self.node_id}, 
                             columns=['nset_name', 'node_id'])
         return df
+
 
 class Solid:
     def __init__(self):
@@ -287,11 +296,14 @@ class Tie:
         return df
 
 
-class Boundary:
+class Step:
     def __init__(self):
         self.bool               = False
+        self.step_name          = ""
+        self.boundary_bool      = False
         self.boundary_names     = []
         self.amplitude_names    = []
+        self.nset_names         = []
         self.u1                 = []
         self.u2                 = []
         self.u3                 = []
@@ -305,23 +317,38 @@ class Boundary:
         self.ur2_value          = []
         self.ur3_value          = []
 
-
     def isChecked(self, spdata):
-        self.bool = False
+        if '*Step' == spdata[0].strip():
+            self.bool               = True
+            for sp in spdata[1:]:
+                if "name=" in sp:
+                    self.step_name = str(sp.split("=")[1])
+            return
+        elif '*End Step' == spdata[0].strip():
+            self.bool               = False
+            self.step_name          = ""
+            return
+        else:
+            self.boundary_bool = False
+
+
+
         if '*Boundary' == spdata[0].strip():
-            self.bool              = True
-            self.amplitude_name    = ""
+            self.boundary_bool = True
             for sp in spdata[1:]:
                 if "amplitude=" in sp:
                     self.amplitude_name = str(sp.split("=")[1])
+            self.boundary_list = {"nset_name":"" ,"u1":False , "u2":False , "u3":False, "ur1":False, "ur2":False, "ur3":False, "u1v":0, "u2v":0, "u3v":0, "ur1v":0, "ur2v":0, "ur3v":0}
+            
 
-            self.amplitude_names      +=  [self.amplitude_name]
+    def append(self, spdata):
+        if self.bool:
+            if self.boundary_bool:
+                self.boundary_list["nset_name"] = spdata[0].strip()
+                spdata[int(spdata[1].strip())] = True
+                if len(spdata) == 4:
+                    spdata[int(spdata[1].strip()) + 6] = float(spdata[4].strip())
 
-
-class Coupling:
-    def __init__(self):
-        self.bool = False
-        
 
 
 
@@ -337,6 +364,8 @@ def get_node_on_surface(element_type, identification, node_ids):
             return [node_ids[2], node_ids[3], node_ids[1]]
         elif identification == "S4":
             return [node_ids[0], node_ids[3], node_ids[2]]
+    elif element_type == "S3R":
+        return [node_ids[0], node_ids[1], node_ids[2]]
 
 
 
@@ -450,11 +479,8 @@ with open(output_path, mode='w') as f:
         f.write("\n")
         f.write('{0: > #50}'.format(20))
         f.write("\n")
-
-
-
-
-
+        f.write("\n")
 
     f.write("*END")
+
 
