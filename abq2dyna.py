@@ -1,8 +1,8 @@
 import pandas as pd
-
+import os
 input_path = r"C:\Temp\abq2dyna.inp"
 output_path = r"C:\Users\1080045106\Desktop\dyna.k"
-
+#output_path = os.getenv("HOMEDRIVE") + os.getenv("HOMEPATH") + r"\Desktop\dyna.k"
 
 class Node:
     def __init__(self):
@@ -296,13 +296,14 @@ class Tie:
         return df
 
 
-class Step:
+
+
+class Boundary:
     def __init__(self):
         self.bool               = False
-        self.step_name          = ""
-        self.boundary_bool      = False
-        self.boundary_names     = []
+        self.amplitude_name     = ""
         self.amplitude_names    = []
+        self.step_names         = []
         self.nset_names         = []
         self.u1                 = []
         self.u2                 = []
@@ -310,46 +311,76 @@ class Step:
         self.ur1                = []
         self.ur2                = []
         self.ur3                = []
-        self.u1_value           = []
-        self.u2_value           = []
-        self.u3_value           = []
-        self.ur1_value          = []
-        self.ur2_value          = []
-        self.ur3_value          = []
+        self.u1v                = []
+        self.u2v                = []
+        self.u3v                = []
+        self.ur1v               = []
+        self.ur2v               = []
+        self.ur3v               = []
+        self.lists              = []
+
+    def isChecked(self, spdata, step_name):
+        if self.bool:
+            self.step_names         += [step_name]
+            self.amplitude_names    += [self.amplitude_name]
+            self.nset_names         += [self.lists[0]]
+            self.u1                 += [self.lists[1]]
+            self.u2                 += [self.lists[2]]
+            self.u3                 += [self.lists[3]]
+            self.ur1                += [self.lists[4]]
+            self.ur2                += [self.lists[5]]
+            self.ur3                += [self.lists[6]]
+            self.u1v                += [self.lists[7]]
+            self.u2v                += [self.lists[8]]
+            self.u3v                += [self.lists[9]]
+            self.ur1v               += [self.lists[10]]
+            self.ur2v               += [self.lists[11]]
+            self.ur3v               += [self.lists[12]]
+            self.bool = False
+
+        if '*Boundary' == spdata[0].strip():
+            self.bool = True
+            for sp in spdata[1:]:
+                if "amplitude=" in sp:
+                    self.amplitude_name = str(sp.split("=")[1])
+            self.lists = ["" , False, False, False, False, False, False, 0, 0, 0, 0, 0, 0]
+            #self.lists = {"nset_name":"" ,"u1":False , "u2":False , "u3":False, "ur1":False, "ur2":False, "ur3":False, "u1v":0, "u2v":0, "u3v":0, "ur1v":0, "ur2v":0, "ur3v":0}
+        
+        
+
+    def append(self, spdata):
+        if self.bool:
+            self.lists[0] = spdata[0].strip()
+            self.lists[int(spdata[1].strip())] = True
+            if len(spdata) == 4:
+                self.lists[int(spdata[1].strip()) + 6] = float(spdata[3].strip())
+
+    def df_boundary_name(self):
+        df = pd.DataFrame(  data={'step_name':self.step_names, 'amplitude':self.amplitude_names, 'nset_name':self.nset_names, 'u1':self.u1, 'u2':self.u2, 'u3':self.u3, 'ur1':self.ur1, 'ur2':self.ur2, 'ur3':self.ur3, 'u1v':self.u1v, 'u2v':self.u2v, 'u3v':self.u3v, 'ur1v':self.ur1v, 'ur2v':self.ur2v, 'ur3v':self.ur3v}, 
+                            columns=['step_name', 'amplitude', 'nset_name', 'u1', 'u2', 'u3', "ur1", "ur2", "ur3", "u1v", "u2v", "u3v", "ur1v", "ur2v", "ur3v"])
+        return df
+
+
+class Step:
+    def __init__(self):
+        self.bool               = False
+        self.step_name          = ""
 
     def isChecked(self, spdata):
+        boundary.isChecked(spdata, self.step_name)
         if '*Step' == spdata[0].strip():
             self.bool               = True
             for sp in spdata[1:]:
                 if "name=" in sp:
                     self.step_name = str(sp.split("=")[1])
             return
-        elif '*End Step' == spdata[0].strip():
+        elif '*End Step' == spdata[0].strip():
             self.bool               = False
             self.step_name          = ""
             return
-        else:
-            self.boundary_bool = False
-
-
-
-        if '*Boundary' == spdata[0].strip():
-            self.boundary_bool = True
-            for sp in spdata[1:]:
-                if "amplitude=" in sp:
-                    self.amplitude_name = str(sp.split("=")[1])
-            self.boundary_list = {"nset_name":"" ,"u1":False , "u2":False , "u3":False, "ur1":False, "ur2":False, "ur3":False, "u1v":0, "u2v":0, "u3v":0, "ur1v":0, "ur2v":0, "ur3v":0}
-            
 
     def append(self, spdata):
-        if self.bool:
-            if self.boundary_bool:
-                self.boundary_list["nset_name"] = spdata[0].strip()
-                spdata[int(spdata[1].strip())] = True
-                if len(spdata) == 4:
-                    spdata[int(spdata[1].strip()) + 6] = float(spdata[4].strip())
-
-
+        boundary.append(spdata)
 
 
 
@@ -376,6 +407,8 @@ elset = Elset()
 solid = Solid()
 surface = Surface()
 tie = Tie()
+boundary = Boundary()
+step = Step()
 with open(input_path) as f:
     lines = [s.strip() for s in  f.readlines()]
     for index, line in enumerate(lines):
@@ -392,6 +425,7 @@ with open(input_path) as f:
             solid.isChecked(spdata)
             surface.isChecked(spdata)
             tie.isChecked(spdata)
+            step.isChecked(spdata)
         else:
             node.append(spdata)
             element.append(spdata)
@@ -399,8 +433,7 @@ with open(input_path) as f:
             elset.append(spdata)
             surface.append(spdata)
             tie.append(spdata)
-
-
+            step.append(spdata)
 
 
 with open(output_path, mode='w') as f:
@@ -482,5 +515,4 @@ with open(output_path, mode='w') as f:
         f.write("\n")
 
     f.write("*END")
-
 
