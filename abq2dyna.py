@@ -340,10 +340,11 @@ class Boundary:
 
         if '*Boundary' == spdata[0].strip():
             self.bool = True
+            self.amplitude_name     = ""
             for sp in spdata[1:]:
                 if "amplitude=" in sp:
                     self.amplitude_name = str(sp.split("=")[1])
-            self.lists = ["" , False, False, False, False, False, False, 0, 0, 0, 0, 0, 0]
+            self.lists = ["" , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             #self.lists = {"nset_name":"" ,"u1":False , "u2":False , "u3":False, "ur1":False, "ur2":False, "ur3":False, "u1v":0, "u2v":0, "u3v":0, "ur1v":0, "ur2v":0, "ur3v":0}
         
         
@@ -351,7 +352,7 @@ class Boundary:
     def append(self, spdata):
         if self.bool:
             self.lists[0] = spdata[0].strip()
-            self.lists[int(spdata[1].strip())] = True
+            self.lists[int(spdata[1].strip())] = 1
             if len(spdata) == 4:
                 self.lists[int(spdata[1].strip()) + 6] = float(spdata[3].strip())
 
@@ -398,6 +399,41 @@ def get_node_on_surface(element_type, identification, node_ids):
     elif element_type == "S3R":
         return [node_ids[0], node_ids[1], node_ids[2]]
 
+def get_node_on_translation(row):
+    if row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
+        return 1
+    elif row.u1 == 0 and row.u2 == 1 and row.u3 == 0:
+        return 2
+    elif row.u1 == 0 and row.u2 == 0 and row.u3 == 1:
+        return 3
+    elif row.u1 == 1 and row.u2 == 1 and row.u3 == 0:
+        return 4
+    elif row.u1 == 0 and row.u2 == 1 and row.u3 == 1:
+        return 5
+    elif row.u1 == 1 and row.u2 == 0 and row.u3 == 1:
+        return 6
+    elif row.u1 == 1 and row.u2 == 1 and row.u3 == 1:
+        return 7
+    else:
+        return 0
+
+def get_node_on_rotaion(row):
+    if row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 0:
+        return 1
+    elif row.ur1 == 0 and row.ur2 == 1 and row.ur3 == 0:
+        return 2
+    elif row.ur1 == 0 and row.ur2 == 0 and row.ur3 == 1:
+        return 3
+    elif row.ur1 == 1 and row.ur2 == 1 and row.ur3 == 0:
+        return 4
+    elif row.ur1 == 0 and row.ur2 == 1 and row.ur3 == 1:
+        return 5
+    elif row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 1:
+        return 6
+    elif row.ur1 == 1 and row.ur2 == 1 and row.ur3 == 1:
+        return 7
+    else:
+        return 0
 
 
 node = Node()
@@ -457,10 +493,19 @@ with open(output_path, mode='w') as f:
     
     f.write("*Node\n")
     df_node_id = node.df_node_id()
-    for index, row in df_node_id.iterrows():
+    df_nset_component = nset.df_nset_component()
+    
+    df_boundary_name = boundary.df_boundary_name()
+    df_temptable = pd.merge(df_boundary_name, df_nset_component, on='nset_name', how='inner')[['node_id','u1', 'u2', 'u3', "ur1", "ur2", "ur3"]].groupby('node_id').max()
+    df_node_component = pd.merge(df_node_id, df_temptable, on='node_id', how='left')
+
+    for index, row in df_node_component.iterrows():
         f.write('{0: > #8}'.format(int(row.node_id)))
-        for st in row[1:]:
-            f.write('{0:0< #16f}'.format(float(st)))
+        f.write('{0:0< #16f}'.format(float(row.x)))
+        f.write('{0:0< #16f}'.format(float(row.y)))
+        f.write('{0:0< #16f}'.format(float(row.z)))
+        f.write('{0:0< #16f}'.format(float(get_node_on_translation(row))))
+        f.write('{0:0< #16f}'.format(float(get_node_on_rotaion(row))))
         f.write("\n")
     
     f.write("*ELEMENT_SOLID\n")
@@ -515,4 +560,3 @@ with open(output_path, mode='w') as f:
         f.write("\n")
 
     f.write("*END")
-
