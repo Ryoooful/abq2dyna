@@ -1,8 +1,7 @@
 import pandas as pd
-import os
 input_path = r"C:\Temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dyna.k"
-#output_path = os.getenv("HOMEDRIVE") + os.getenv("HOMEPATH") + r"\Desktop\dyna.k"
+output_path = r"C:\Users\1080045106\Desktop\dyna.key"
+
 
 class Node:
     def __init__(self):
@@ -26,7 +25,7 @@ class Node:
             self.z  += [float(spdata[3]) * 1000]
 
     def df_node_id(self):
-        df = pd.DataFrame(  index=self.node_id, 
+        df = pd.DataFrame(  index=self.node_id,
                             data={'node_id':self.node_id, 'x':self.x, 'y':self.y, 'z':self.z}, 
                             columns=['node_id', 'x', 'y', 'z'])
         return df
@@ -60,7 +59,7 @@ class Element:
             self.temp_node_id   += [temp]
     
     def df_element_id(self):
-        df = pd.DataFrame(  index=self.element_id, 
+        df = pd.DataFrame(  index=self.element_id,
                             data={'element_id':self.element_id, 'element_type':self.element_types, 'node_ids':self.temp_node_id}, 
                             columns=['element_id', 'element_type', 'node_ids'])
         return df
@@ -117,7 +116,7 @@ class Elset:
                         self.element_id     += [int(st)]
 
     def df_elset_name(self):
-        df = pd.DataFrame(  index=self.elset_names, 
+        df = pd.DataFrame(  index=self.elset_names,
                             data={'elset_name':self.elset_names, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
                             columns=['elset_name', 'instance_name', 'internal', 'generate'])
         return df
@@ -182,7 +181,7 @@ class Nset:
                                 self.node_id    += [int(row.node_id)]
 
     def df_nset_name(self):
-        df = pd.DataFrame(  index=self.nset_names, 
+        df = pd.DataFrame(  index=self.nset_names,
                             data={'nset_name':self.nset_names, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
                             columns=['nset_name', 'instance_name', 'internal', 'generate'])
         return df
@@ -209,7 +208,7 @@ class Solid:
                     self.material_names += [str(sp.split("=")[1])]
 
     def df_solid_id(self):
-        df = pd.DataFrame(  index=self.solid_id, 
+        df = pd.DataFrame(  index=self.solid_id,
                             data={'solid_id':self.solid_id, 'elset_name':self.elset_names, 'material_name':self.material_names}, 
                             columns=['solid_id', 'elset_name', 'material_name'])
         return df
@@ -236,8 +235,7 @@ class Surface:
                     self.surface_type = str(sp.split("=")[1])
                 elif "name=" in sp:
                     self.surface_name = str(sp.split("=")[1])
-            self.sid            = int(len(self.surface_id)+1)
-            self.surface_id     += [self.sid]
+            self.surface_id     += [len(self.surface_id)+1]
             self.surface_names  += [self.surface_name]
             self.surface_types  += [self.surface_type]
     
@@ -249,8 +247,8 @@ class Surface:
 
     def df_surface_name(self):
         df = pd.DataFrame(  index=self.surface_names,
-                            data={'surface_name':self.surface_names, 'surface_id':self.surface_id, 'surface_type':self.surface_types}, 
-                            columns=['surface_name', 'surface_id', 'surface_type'])
+                            data={'surface_id':self.surface_id, 'surface_name':self.surface_names, 'surface_type':self.surface_types}, 
+                            columns=['surface_id', 'surface_name', 'surface_type'])
         return df
 
     def df_surface_component(self):
@@ -290,10 +288,111 @@ class Tie:
             self.bool = False
 
     def df_tie_name(self):
-        df = pd.DataFrame(  index = self.tie_names,
+        df = pd.DataFrame(  index=self.tie_names,
                             data={'tie_id':self.tie_id, 'tie_name':self.tie_names, 'adjust':self.adjust, 'slave_surface':self.slave_surfaces, 'master_surface':self.master_surfaces}, 
                             columns=['tie_id', 'tie_name', 'adjust', 'slave_surface', 'master_surface'])
         return df
+
+class Constraint:
+    def __init__(self):
+        self.constraint_id      = []
+        self.constraint_names   = []
+        self.nset_names         = []
+        self.surface_names     = []
+        
+    def isChecked(self, spdata):
+        if '*Coupling' == spdata[0].strip():
+            self.surface_name      = ""
+            self.nset_name          = ""
+            self.constraint_name    = ""
+            for sp in spdata[1:]:
+                if "constraint name=" in sp:
+                    self.constraint_name = str(sp.split("=")[1])
+                elif "ref node=" in sp:
+                    self.nset_name = str(sp.split("=")[1])
+                elif "surface=" in sp:
+                    self.surface_name = str(sp.split("=")[1])
+            self.constraint_id      +=  [len(self.constraint_id) + 1]
+            self.constraint_names   +=  [self.constraint_name]
+            self.nset_names         +=  [self.nset_name]
+            self.surface_names     +=  [self.surface_name]
+
+    def df_constraint_name(self):
+        df = pd.DataFrame(  index=self.constraint_names,
+                            data={'constraint_id':self.constraint_id, 'constraint_name':self.constraint_names, 'nset_name':self.nset_names, 'surface_name':self.surface_names}, 
+                            columns=['constraint_id', 'constraint_name', 'nset_name', 'surface_name'])
+        return df
+
+
+class Material:
+    def __init__(self):
+        self.bool = False
+        self.material_id    = []
+        self.material_names = []
+        self.conductivity_list   = []
+        self.density_list        = []
+        self.young_list          = []
+        self.poason_list         = []
+        self.expansion_list      = []
+        self.specific_heat_list  = []
+        self.ogden_list          = []
+
+    def isChecked(self, spdata):
+        self.before_line = ""
+        if '*Material' == spdata[0].strip():
+            self.bool = True
+            self.material_name = ""
+            self.conductivity = 0
+            self.density = 0
+            self.young = 0
+            self.poason = 0
+            self.expansion = 0
+            self.specific_heat = 0
+            self.ogden = []            
+            for sp in spdata[1:]:
+                if "name=" in sp:
+                    self.material_name = str(sp.split("=")[1])
+
+        elif spdata[0].strip() in ['*Conductivity', '*Density', '*Elastic', '*Expansion', '*Specific Heat', '*Hyperelastic']:
+            self.before_line = spdata[0].strip()
+        else:
+            if self.bool:
+                self.material_id         += [len(self.material_id) + 1]
+                self.material_names      += [self.material_name]
+                self.conductivity_list   += [self.conductivity]
+                self.density_list        += [self.density]
+                self.young_list          += [self.young]
+                self.poason_list         += [self.poason]
+                self.expansion_list      += [self.expansion]
+                self.specific_heat_list  += [self.specific_heat]
+                self.ogden_list          += [self.ogden]
+            self.bool = False
+        
+    def append(self, spdata):
+        if self.bool:
+            if self.before_line == '*Conductivity':
+                self.conductivity = float(spdata[0].strip())
+            elif self.before_line == '*Density':    
+                self.density = float(spdata[0].strip())
+            elif self.before_line == '*Elastic':
+                self.young = float(spdata[0].strip())
+                self.poason = float(spdata[1].strip())
+            elif self.before_line == '*Expansion':
+                self.expansion = float(spdata[0].strip())
+            elif self.before_line == '*Specific Heat':
+                self.specific_heat = float(spdata[0].strip())
+            elif self.before_line == '*Hyperelastic':
+                self.ogden += [float(st) for st in spdata[:5]]
+            self.before_line = ""
+
+    def df_material_name(self):
+        df = pd.DataFrame(  index=self.material_names,
+                            data={'material_id':self.material_id, 'material_name':self.material_names, 'conductivity':self.conductivity_list, 'density':self.density_list, 'young':self.young_list, 'poason':self.poason_list, 'specific_heat':self.specific_heat_list, 'ogden':self.ogden_list}, 
+                            columns=['material_id', 'material_name', 'conductivity', 'density', 'young', 'poason', 'specific_heat', 'ogden'])
+                            
+        return df
+
+
 
 
 
@@ -445,6 +544,8 @@ surface = Surface()
 tie = Tie()
 boundary = Boundary()
 step = Step()
+constraint = Constraint()
+material = Material()
 with open(input_path) as f:
     lines = [s.strip() for s in  f.readlines()]
     for index, line in enumerate(lines):
@@ -462,6 +563,8 @@ with open(input_path) as f:
             surface.isChecked(spdata)
             tie.isChecked(spdata)
             step.isChecked(spdata)
+            constraint.isChecked(spdata)
+            material.isChecked(spdata)
         else:
             node.append(spdata)
             element.append(spdata)
@@ -470,6 +573,7 @@ with open(input_path) as f:
             surface.append(spdata)
             tie.append(spdata)
             step.append(spdata)
+            material.append(spdata)
 
 
 with open(output_path, mode='w') as f:
@@ -483,6 +587,10 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(10))                
         f.write("\n")
     
+
+
+
+
     for index, row in df_solid_id.iterrows():
         f.write("*PART\n")
         f.write(str(row.elset_name) + "\n")
@@ -559,4 +667,41 @@ with open(output_path, mode='w') as f:
         f.write("\n")
         f.write("\n")
 
+    df_constraint_name = constraint.df_constraint_name()
+
+    for index, pid in df_constraint_name.iterrows():
+        f.write("*SET_NODE_TITLE\n")
+        f.write(pid.surface_name)
+        f.write("\n")
+        f.write(str(pid.constraint_id))
+        f.write("\n")
+        temp_nodes = []
+        for index, row in df_segment_component[df_segment_component['surface_name'] == pid.surface_name].iterrows():
+            temp_nodes += [nid for nid in get_node_on_surface(row.element_type.strip(), row.identification.strip(), row.node_ids)]
+        temp_nodes = list(set(temp_nodes))
+        temp_nodes.sort()
+        for index, st in enumerate(temp_nodes):
+            f.write('{0: > #10}'.format(st))
+            if (index + 1) % 8 == 0:
+                f.write("\n")
+        f.write("\n")
+
+
+        f.write("*CONSTRAINED_NODAL_RIGID_BODY_SPC_TITLE\n")
+        f.write(pid.constraint_name)
+        f.write("\n")
+        f.write('{0: > #10}'.format(pid.constraint_id))
+        f.write('{0: > #10}'.format(0))
+        f.write('{0: > #10}'.format(pid.constraint_id))
+        f.write("\n")
+        f.write(' 1.0000000         5         7')
+        f.write("\n")
+        
+        ##*BOUNDARY_PRESCRIBED_MOTION_RIGID_ID
+
+
+
+
     f.write("*END")
+
+print(material.df_material_name())
