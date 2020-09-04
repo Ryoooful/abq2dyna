@@ -1,5 +1,5 @@
 import pandas as pd
-input_path = r"C:\Temp\abq2dyna.inp"
+input_path = r"C:\Users\1080045106\Desktop\p"
 output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 
 
@@ -353,7 +353,7 @@ class Material:
                 if "name=" in sp:
                     self.material_name = str(sp.split("=")[1])
 
-        elif spdata[0].strip() in ['*Conductivity', '*Density', '*Elastic', '*Expansion', '*Specific Heat', '*Hyperelastic']:
+        elif spdata[0].strip() in ['*Conductivity', '*Density', '*Elastic', '*Expansion', '*Specific?Heat', '*Hyperelastic']:
             self.before_line = spdata[0].strip()
         else:
             if self.bool:
@@ -379,10 +379,10 @@ class Material:
                 self.poason = float(spdata[1].strip())
             elif self.before_line == '*Expansion':
                 self.expansion = float(spdata[0].strip())
-            elif self.before_line == '*Specific Heat':
+            elif self.before_line == '*Specific?Heat':
                 self.specific_heat = float(spdata[0].strip())
             elif self.before_line == '*Hyperelastic':
-                self.ogden += [float(st) for st in spdata[:5]]
+                self.ogden += [float(st) for st in spdata[:6]]
             self.before_line = ""
 
     def df_material_name(self):
@@ -498,6 +498,18 @@ def get_node_on_surface(element_type, identification, node_ids):
     elif element_type == "S3R":
         return [node_ids[0], node_ids[1], node_ids[2]]
 
+def get_elform(element_type, ogden):
+    if element_type == "C3D4":
+        if len(ogden) == 0:
+            return 10
+        else:
+            return 13
+
+
+
+
+
+
 def get_node_on_translation(row):
     if row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
         return 1
@@ -579,25 +591,70 @@ with open(input_path) as f:
 with open(output_path, mode='w') as f:
 
     df_solid_id = solid.df_solid_id()
+    df_material_name = material.df_material_name()
 
-    for index, row in df_solid_id.iterrows():
+    df_elset_component = elset.df_elset_component()
+    df_element_id = element.df_element_id()
+    df_solid_component = pd.merge(df_solid_id, df_elset_component, on='elset_name', how='left')
+    df_part_component = pd.merge(df_solid_component, df_element_id, on='element_id', how='left')
+    #print(df_part_component[['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max())
+    for index, secid in df_part_component[['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().iterrows():
         f.write("*SECTION_SOLID_TITLE\n")
-        f.write(str(row.elset_name) + "\n")
-        f.write('{0: > #10}'.format(row.solid_id))      
-        f.write('{0: > #10}'.format(10))                
+
+        f.write(str(secid.elset_name) + "\n")
+        f.write('{0: > #10}'.format(index))
+
+        for aaa, mat in df_material_name[df_material_name['material_name'] == secid.material_name].iterrows():
+            f.write('{0: > #10}'.format(get_elform(secid.element_type, mat.ogden)))
+            f.write("\n")
+            if len(mat.ogden) == 0:
+                f.write("*MAT_ELASTIC_TITLE\n")
+                f.write(secid.material_name)
+                f.write("\n")
+                f.write('{0: > #10}'.format(mat.material_id))
+                f.write('{0: > #10}'.format(mat.density))       #ro
+                f.write('{0: > #10}'.format(mat.young))         #e
+                f.write('{0: > #10}'.format(mat.poason))        #pr
+                f.write("\n")
+            else:
+                f.write("*MAT_OGDEN_RUBBER_TITLE\n")
+                f.write(secid.material_name)
+                f.write("\n")
+                f.write('{0: > #10}'.format(mat.material_id))
+                f.write('{0: > #10}'.format(mat.density))       #ro
+                f.write('{0: > #10}'.format(0.499))             #pr
+                f.write('{0: > #10}'.format(0))                 #n
+                f.write('{0: > #10}'.format(3))                 #nv
+                f.write('{0: > #10}'.format(1))                 #g
+                f.write('{0: > #10}'.format(0.001))             #sigf
+                f.write('{0: > #10}'.format(0))                 #g
+                f.write("\n")
+                f.write('{0: > #10}'.format(mat.ogden[0]))
+                f.write('{0: > #10}'.format(mat.ogden[2]))
+                f.write('{0: > #10}'.format(mat.ogden[4]))
+                f.write('{0: > #10}'.format(0))
+                f.write('{0: > #10}'.format(0))
+                f.write('{0: > #10}'.format(0))
+                f.write("\n")
+                f.write('{0: > #10}'.format(mat.ogden[1]))
+                f.write('{0: > #10}'.format(mat.ogden[3]))
+                f.write('{0: > #10}'.format(mat.ogden[5]))
+                f.write('{0: > #10}'.format(0))
+                f.write('{0: > #10}'.format(0))
+                f.write('{0: > #10}'.format(0))     
+                f.write("\n")
+
+                #*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID
+
+            f.write("*PART\n")
+            f.write(str(secid.elset_name) + "\n")
+            f.write('{0: > #10}'.format(index))
+            f.write('{0: > #10}'.format(index))
+            f.write('{0: > #10}'.format(mat.material_id))
+            f.write("\n")
         f.write("\n")
-    
 
 
-
-
-    for index, row in df_solid_id.iterrows():
-        f.write("*PART\n")
-        f.write(str(row.elset_name) + "\n")
-        f.write('{0: > #10}'.format(row.solid_id))
-        f.write('{0: > #10}'.format(row.solid_id))
-        f.write('{0: > #10}'.format(0))
-        f.write("\n")
     
     f.write("*Node\n")
     df_node_id = node.df_node_id()
@@ -617,11 +674,6 @@ with open(output_path, mode='w') as f:
         f.write("\n")
     
     f.write("*ELEMENT_SOLID\n")
-    df_elset_component = elset.df_elset_component()
-    df_element_id = element.df_element_id()
-    df_solid_component = pd.merge(df_solid_id, df_elset_component, on='elset_name', how='left')
-    df_part_component = pd.merge(df_solid_component, df_element_id, on='element_id', how='left')
-
     for index, row in df_part_component.iterrows():
         f.write('{0: > #8}'.format(row.element_id))
         f.write('{0: > #8}'.format(row.solid_id))
@@ -704,4 +756,3 @@ with open(output_path, mode='w') as f:
 
     f.write("*END")
 
-print(material.df_material_name())
