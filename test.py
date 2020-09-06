@@ -1,188 +1,63 @@
 import pandas as pd
+input_path = r"C:\temp\abq2dyna.inp"
+keyword = ""
 
-input_path = r"C:\Temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dynaa.k"
+table = {
+    "t_node_id":            {"node_id":[], "x":[], "y":[], "z":[]},
+    "t_element_id":         {"element_id":[], "element_type":[], "node_ids":[]},
+    "t_element_component":  {"element_id":[], "node_id":[]}
+    "t_elset_name":         {'elset_name':[], 'instance_name':[], 'generate':[], 'internal':[]}
+    "elset_component":      {'elset_name':[] , 'element_id':[]}
+        }
 
+def create_table(table):
+    return pd.DataFrame(data=table, columns=table.keys())
 
-class Node:
-    def __init__(self):
-        self.id = []
-        self.x  = []
-        self.y  = []
-        self.z  = []
-        self.bool = False
+def get_name(name_label, spdata):
+    for sp in spdata[1:]:
+        if name_label + "=" == sp:
+            return str(sp.split("=")[1])
+    return ""
 
-    def isChecked(self, line):
-        if '*Node' == line:
-            self.bool = True
-        else:
-            self.bool = False
-
-    def append(self, spdata):
-        if '*' in spdata[0]:
-            self.bool = False
-        
-        if self.bool:
-            self.id += [int(spdata[0])]
-            self.x  += [float(spdata[1]) * 1000]
-            self.y  += [float(spdata[2]) * 1000]
-            self.z  += [float(spdata[3]) * 1000]
-
-    def dataframe(self):
-        df = pd.DataFrame(index=self.id, data={'nid':self.id, 'x':self.x, 'y':self.y, 'z':self.z}, columns=['nid', 'x', 'y', 'z'])
-        return df
+def get_bool(label, spdata):
+    for sp in spdata[1:]:
+        if label == sp:
+            return True
+    return False
 
 
-class Element:
-    def __init__(self):
-        self.eid            = []
-        self.element_names  = []
-        self.temp_eid       = []
-        self.nid            = []
-        self.bool           = False
-        
-    def isChecked(self, spdata):
-        if '*Element' == spdata[0]:
-            self.bool = True
-            self.element_name = spdata[1].split("=")[1].strip()
-        else:
-            self.bool = False
-
-    def append(self, spdata):
-        if self.bool:
-            self.id = int(spdata[0])
-            self.eid            += [self.id]
-            self.element_names  += [self.element_name]
-
-            for st in spdata[1:]:
-                self.temp_eid   += [self.id]
-                self.nid        += [int(st.strip())]
-    
-    def df_element_id(self):
-        df = pd.DataFrame(index=self.eid, data={'eid':self.eid, 'element_name':self.element_names}, columns=['eid', 'element_name'])
-        return df
-    
-    def df_element_node(self):
-        df = pd.DataFrame(data={'eid':self.temp_eid, 'nid':self.nid}, columns=['eid', 'nid'])
-        return df
-
-
-class Segment:
-    def __init__(self):
-        self.bool = False
-        self.segment_types          = []
-        self.segment_names          = []
-        self.instance_names         = []
-        self.internals              = []
-        self.generates              = []
-
-        self.temp_segment_names     = []
-        self.nid                    = []
-
-        self.generate = False
-        
-    def isChecked(self, spdata):
-        if self.bool:
-            self.bool = False
-
-        if '*Nset' == spdata[0].strip() or '*Elset' == spdata[0].strip():
-            self.bool = True
-            self.segment_name = ""
-            self.instance_name = ""
-            self.internal = False
-            self.generate = False
-
-            self.segment_type = spdata[0].strip()
-            for sp in spdata:                    
-                if "nset=" in sp or "elset=" in sp:
-                    self.segment_name = sp.split("=")[1]
-                elif "instance=" in sp:
-                    self.instance_name = sp.split("=")[1]
-                elif sp.strip() =="internal":
-                    self.internal = True
-                elif sp.strip() =="generate":
-                    self.generate = True
-
-            self.segment_names  += [self.segment_name]
-            self.segment_types  += [self.segment_type]
-            self.instance_names += [self.instance_name]
-            self.internals      += [self.internal]
-            self.generates      += [self.generate]
-
-    def append(self, spdata):
-        if self.bool:
-            if self.generate:
-                for st in range(int(spdata[0]), int(spdata[1]), int(spdata[2])):
-                    self.temp_segment_names += [self.segment_name]
-                    self.nid                += [st]
-            else:
-                for st in spdata:
-                    if st.strip() != "":
-                        self.temp_segment_names += [self.segment_name]
-                        self.nid                += [st]
-
-    def df_segment_name(self):
-        df = pd.DataFrame(index=self.segment_names, 
-                            data={'segment_name':self.segment_names, 'segment_type':self.segment_types, 'instance_name':self.instance_names, 'generate':self.generates, 'internal':self.internals}, 
-                            columns=['segment_name', 'segment_type', 'instance_name', 'internal', 'generate'])
-        return df
-
-    def df_segment_node(self):
-        df = pd.DataFrame(data={'segment_name':self.temp_segment_names , 'nid':self.nid}, 
-                            columns=['segment_name', 'nid'])
-        return df
-
-
-node = Node()
-element = Element()
-segment = Segment()
 with open(input_path) as f:
-    lines = [s.strip() for s in  f.readlines()]
-    for line in lines:
-        if "**" in line:
-            continue
+    lines = [s.strip() for s in f.readlines()]
 
-        spdata = line.split(",")
-
-        if "*" in line:
-            node.isChecked(line)
-            element.isChecked(spdata)
-            segment.isChecked(spdata)
-        else:
-            node.append(spdata)
-            element.append(spdata)
-            segment.append(spdata)
-                
-nodes = node.dataframe()
-elements = element.df_element_node()
-segments = segment.df_segment_node()
-
-with open(output_path, mode='w') as f:
-    f.write("*Node\n")
-    for index, row in nodes.iterrows():
-        f.write('{0: > #8}'.format(index))
-        for st in row:
-            f.write('{0:0< #16f}'.format(st))
-        f.write("\n")
+for line in lines:
+    ##Comment Brakeout
+    if "**" == line[:2]:
+        continue
     
-    f.write("*ELEMENT_SOLID\n")
+    spdata = [s.strip() for s in line.split(",")]
+    
+    ##Save Keyword
+    if "*" == spdata[0][:1]:
+        keyword = spdata[0]
+        if keyword == "*Element":
+            element_type = get_name("type", spdata)
+        elif keyword == "*Elset":
+            element_type = get_name("elset", spdata)
+        continue
 
+    ##Append Data
+    if   keyword == "*Node":
+        table["t_node_id"]["node_id"]               += [int(spdata[0])]
+        table["t_node_id"]["x"]                     += [float(spdata[1]) * 1000]
+        table["t_node_id"]["y"]                     += [float(spdata[2]) * 1000]
+        table["t_node_id"]["z"]                     += [float(spdata[3]) * 1000]
+    elif keyword == "*Element":
+        table["t_element_id"]["element_id"]         += [int(spdata[0])]
+        table["t_element_id"]["element_type"]       += [element_type]
+        table["t_element_id"]["node_ids"]           += [[int(st) for st in spdata[1:]]]
+        table["t_element_component"]["element_id"]  += [int(spdata[0]) for st in spdata[1:]]
+        table["t_element_component"]["node_id"]     += [int(st) for st in spdata[1:]]
+    elif keyword == "*Elset":
 
-
-
-    #for index, row in elements.iterrows():
-    #    f.write('{0: > #8}'.format(row[0]))
-    ##    f.write('{0: > #8}'.format(1))
-    #    f.write("\n")
-    #    for st in row[3]:
-    #        f.write('{0: > #8}'.format(st))
-    #    f.write('{0: > #8}'.format(row[3][3]))
-    #    f.write('{0: > #8}'.format(row[3][3]))
-    #    f.write('{0: > #8}'.format(row[3][3]))
-    #    f.write('{0: > #8}'.format(row[3][3]))
-    #    f.write("\n")
-    f.write("*END")
         
-        
-
-
+print (create_table(table["t_element_component"]))
