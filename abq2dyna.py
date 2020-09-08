@@ -14,6 +14,7 @@ abaqus = {
     "t_tie_name":           {"tie_id":[], "tie_name":[], "adjust":[], "slave_surface":[], "master_surface":[]},
     "t_constraint_name":    {"constraint_id":[], "constraint_name":[], "nset_name":[], "surface_name":[]},
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
+    "t_transform_name":     {"nset_name":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}
         }
 
@@ -58,7 +59,7 @@ for line in lines:
     if "*" == spdata[0][:1]:
         keyword = spdata[0]
         if "*Solid Section" == keyword:
-            abaqus["t_solid_id"]["solid_id"]                += [len(abaqus["t_solid_id"]["solid_id"])]
+            abaqus["t_solid_id"]["solid_id"]                += [len(abaqus["t_solid_id"]["solid_id"]) + 1]
             abaqus["t_solid_id"]["elset_name"]              += [get_name("elset", spdata)]
             abaqus["t_solid_id"]["material_name"]           += [get_name("material", spdata)]
         elif "*Coupling" == keyword:
@@ -86,12 +87,15 @@ for line in lines:
             abaqus["t_tie_name"]["tie_id"]                  += [len(abaqus["t_tie_name"]["tie_id"])]
             abaqus["t_tie_name"]["tie_name"]                += [get_name("name", spdata)]
             abaqus["t_tie_name"]["adjust"]                  += [get_bool("adjust", spdata, True)]
+        elif "*Transform" == keyword:
+            abaqus["t_transform_name"]["nset_name"]         += [get_name("nset", spdata)]
+            abaqus["t_transform_name"]["type"]              += [get_name("type", spdata)]
         elif "*Material" == keyword:
             material_name = get_name("name", spdata)
             abaqus["t_material_name"]["material_id"]        += [len(abaqus["t_material_name"]["material_id"])]
             abaqus["t_material_name"]["material_name"]      += [material_name]
-            abaqus["t_material_name"]["hyperelastic"]       += []
-            for col in [st for st in abaqus["t_material_name"].keys()][2:]:
+            abaqus["t_material_name"]["hyperelastic"]       += [[]]
+            for col in [st for st in abaqus["t_material_name"].keys()][3:]:
                 abaqus["t_material_name"][col] += [0]
         elif "*Step" == keyword: 
             step_name = get_name("name", spdata)
@@ -114,6 +118,9 @@ for line in lines:
         abaqus["t_element_id"]["node_ids"]               += [[int(st) for st in spdata[1:] if st.isdecimal()]]
         abaqus["t_element_component"]["element_id"]      += [int(spdata[0])  for st in spdata[1:]]
         abaqus["t_element_component"]["node_id"]         += [int(st) for st in spdata[1:]]
+    elif keyword == "*Tie":  
+        abaqus["t_tie_name"]["slave_surface"]          += [spdata[0]]
+        abaqus["t_tie_name"]["master_surface"]         += [spdata[1]]
     elif keyword == "*Elset":        
         if elset_generate:
             abaqus["t_elset_component"]["elset_name"]    += [elset_name  for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
@@ -124,7 +131,7 @@ for line in lines:
     elif keyword == "*Nset":  
         if nset_generate:
             abaqus["t_nset_component"]["nset_name"]      += [nset_name  for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
-            abaqus["t_nset_component"]["node_id"]        += [int(st)     for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
+            abaqus["t_nset_component"]["node_id"]        += [int(st)    for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
         else:
             for st in spdata:
                 if st.isdecimal():
@@ -136,24 +143,28 @@ for line in lines:
                         abaqus["t_nset_component"]["nset_name"]  += [nset_name]
                         abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
                     del tmp
-    elif keyword == "*Tie":  
-        abaqus["t_tie_name"]["slave_surface"]          += [spdata[0]]
-        abaqus["t_tie_name"]["master_surface"]         += [spdata[1]]
+    elif keyword == "*Transform": 
+        for index, st in enumerate([col for col in abaqus["t_transform_name"].keys()][2:]):
+            abaqus["t_transform_name"][st] += [float(spdata[index - 2])]
+
     elif keyword == "*Conductivity": 
-        abaqus["t_material_name"]["conductivity"][len(abaqus["t_material_name"]["conductivity"]) - 1]     = [spdata[0]]
+        abaqus["t_material_name"]["conductivity"][len(abaqus["t_material_name"]["conductivity"]) - 1]     = float(spdata[0])
     elif keyword == "*Density": 
-        abaqus["t_material_name"]["density"][len(abaqus["t_material_name"]["density"]) - 1]               = [spdata[0]]
+        abaqus["t_material_name"]["density"][len(abaqus["t_material_name"]["density"]) - 1]               = float(spdata[0])
     elif keyword == "*Elastic": 
-        abaqus["t_material_name"]["young"][len(abaqus["t_material_name"]["young"]) - 1]                   = [spdata[0]]
-        abaqus["t_material_name"]["poason"][len(abaqus["t_material_name"]["poason"]) - 1]                 = [spdata[1]]
+        abaqus["t_material_name"]["young"][len(abaqus["t_material_name"]["young"]) - 1]                   = float(spdata[0])
+        abaqus["t_material_name"]["poason"][len(abaqus["t_material_name"]["poason"]) - 1]                 = float(spdata[1])
     elif keyword == "*Specific Heat": 
-        abaqus["t_material_name"]["specific_heat"][len(abaqus["t_material_name"]["specific_heat"]) - 1]   = [spdata[0]]
+        abaqus["t_material_name"]["specific_heat"][len(abaqus["t_material_name"]["specific_heat"]) - 1]   = float(spdata[0])
     elif keyword == "*Hyperelastic": 
         abaqus["t_material_name"]["hyperelastic"][len(abaqus["t_material_name"]["hyperelastic"]) - 1]     = [float(st) for st in spdata[:6]]
         keyword = ""
 
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
+
+
+
 
 #Convert .k 
 def get_node_on_surface(element_type, identification, node_ids):
@@ -177,7 +188,7 @@ def get_elform(element_type, ogden):
             return 13
 
 def get_node_on_translation(row):
-    if row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
+    if   row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
         return 1
     elif row.u1 == 0 and row.u2 == 1 and row.u3 == 0:
         return 2
@@ -195,7 +206,7 @@ def get_node_on_translation(row):
         return 0
 
 def get_node_on_rotaion(row):
-    if row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 0:
+    if   row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 0:
         return 1
     elif row.ur1 == 0 and row.ur2 == 1 and row.ur3 == 0:
         return 2
@@ -215,22 +226,89 @@ def get_node_on_rotaion(row):
 lsdyna = {
     "t_nid":            {"nid":[], "x":[], "y":[], "z":[], "tc":[], "rc":[]},
     "t_eid":            {"eid":[], "pid":[], "n1":[], "n2":[], "n3":[], "n4":[], "n5":[], "n6":[], "n7":[], "n8":[]},
-    "t_secid_solid":    {"secid":[], "title":[], "elform":[] },
+    "t_secid_solid":    {"secid":[], "title":[], "elform":[]},
     "t_part_id":        {"pid":[], "heading":[], "secid":[], "mid":[]},
-    "t_mid_ogden":      {"mid":[], "ro":[]},
+    "t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
     "t_mid_elastics":   {"mid":[], "ro":[], "e":[], "pr":[]},
-    "t_cid_exterior":   {"cid":[], "":[]},
-    "t_sid_nset":       {},
-    "t_pid_rigid":      {},
+    "t_cid_exterior":   {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
+    "t_sid_nset":       {"sid":[], "n1":[], "n2":[], "n3":[], "n4":[], "n5":[], "n6":[], "n7":[], "n8":[]},
+    "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "sstyp":[], "mstyp":[]},
     "t_bid_rigid":      {},
     "t_bid_node":       {},
     "t_lcid":           {},
-    "t_sid_segment":    {},
-    "t_cid_surface":    {},
+    "t_sid_segment":    {"sid":[], "nid1":[], "nid2":[], "nid3":[], "nid4":[]},
+    "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
     "t_vid":            {}
         }
 
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
 
-print(abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index())
+#print(abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index())
+
+#print(abaqus["t_material_name"])
+#print(abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == "S6-50"])
+
+tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index()
+tmp.index = tmp.index + 1
+for index, secid in tmp.iterrows():
+    mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == secid.material_name].iloc[0]
+    lsdyna["t_secid_solid"]["secid"]    += [secid.solid_id]
+    lsdyna["t_secid_solid"]["title"]    += [secid.elset_name]
+    lsdyna["t_secid_solid"]["elform"]   += [get_elform(secid.element_type, mat["hyperelastic"])]
+    lsdyna["t_part_id"]["pid"]          += [secid.solid_id]
+    lsdyna["t_part_id"]["heading"]      += [secid.elset_name]
+    lsdyna["t_part_id"]["secid"]        += [secid.solid_id]
+    lsdyna["t_part_id"]["mid"]          += [mat["material_id"] + 1]
+    lsdyna["t_cid_exterior"]["cid"]     += [secid.solid_id]
+    lsdyna["t_cid_exterior"]["ssid"]    += [secid.solid_id]
+    lsdyna["t_cid_exterior"]["msid"]    += [3]
+    lsdyna["t_cid_exterior"]["sstyp"]   += [0]
+    lsdyna["t_cid_exterior"]["mstyp"]   += [0]
+    if len(mat["hyperelastic"]) > 1:
+        lsdyna["t_mid_ogden"]["mid"]    += [mat["material_id"] + 1]
+        lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
+        lsdyna["t_mid_ogden"]["pr"]     += [0.499]
+        for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
+            lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
+    else:
+        lsdyna["t_mid_elastics"]["mid"]    += [mat["material_id"] + 1]
+        lsdyna["t_mid_elastics"]["ro"]     += [float(mat["density"])]
+        lsdyna["t_mid_elastics"]["e"]      += [float(mat["young"])]
+        lsdyna["t_mid_elastics"]["pr"]     += [float(mat["poason"])]
+del tmp
+
+for index, eid in abaqus["q_part_component"].iterrows():
+    lsdyna["t_eid"]["eid"]     += [eid.element_id]
+    lsdyna["t_eid"]["pid"]     += [eid.solid_id]
+    for n, st in enumerate([col for col in lsdyna["t_eid"].keys()][2:]):
+        if len(eid.node_ids) >= n + 1:
+            lsdyna["t_eid"][st] += [eid.node_ids[n]]
+        else:
+            lsdyna["t_eid"][st] += [eid.node_ids[len(eid.node_ids) - 1]]
+
+
+for index, cid in abaqus["t_tie_name"].iterrows():
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+print(create_table(lsdyna["t_eid"]))
+
