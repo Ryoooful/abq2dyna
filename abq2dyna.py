@@ -6,9 +6,9 @@ abaqus = {
     "t_node_id":            {"node_id":[], "x":[], "y":[], "z":[]},
     "t_element_id":         {"element_id":[], "element_type":[], "node_ids":[]},
     "t_element_component":  {"element_id":[], "node_id":[]},
-    "t_elset_name":         {"elset_name":[], "instance_name":[], "generate":[], "internal":[]},
+    "t_elset_name":         {"elset_id":[], "elset_name":[], "instance_name":[], "generate":[], "internal":[]},
     "t_elset_component":    {"elset_name":[], "element_id":[]},
-    "t_nset_name":          {"nset_name":[], "instance_name":[], "generate":[], "internal":[]},
+    "t_nset_name":          {"nset_id":[], "nset_name":[], "instance_name":[], "generate":[], "internal":[]},
     "t_nset_component":     {"nset_name":[], "node_id":[]},
     "t_solid_id":           {"solid_id":[], "elset_name":[], "material_name":[]},
     "t_tie_name":           {"tie_id":[], "tie_name":[], "adjust":[], "slave_surface":[], "master_surface":[]},
@@ -74,6 +74,7 @@ for line in lines:
         elif "*Elset" == keyword:
             elset_name = get_name("elset", spdata)
             elset_generate = get_bool("generate", spdata, False)
+            abaqus["t_elset_name"]["elset_id"]              += [len(abaqus["t_elset_name"]["elset_id"]) + 1]
             abaqus["t_elset_name"]["elset_name"]            += [elset_name]
             abaqus["t_elset_name"]["instance_name"]         += [get_name("instance", spdata)]
             abaqus["t_elset_name"]["generate"]              += [elset_generate]
@@ -81,6 +82,7 @@ for line in lines:
         elif "*Nset" == keyword:
             nset_name = get_name("nset", spdata)
             nset_generate = get_bool("generate", spdata, False)
+            abaqus["t_nset_name"]["nset_id"]                += [len(abaqus["t_nset_name"]["nset_id"]) + 1]
             abaqus["t_nset_name"]["nset_name"]              += [nset_name]
             abaqus["t_nset_name"]["instance_name"]          += [get_name("instance", spdata)]
             abaqus["t_nset_name"]["generate"]               += [nset_generate]
@@ -180,13 +182,6 @@ for st in abaqus.keys():
 #Convert .k 
 
 
-def get_elform(element_type, ogden):
-    if element_type == "C3D4":
-        if len(ogden) == 0:
-            return 10
-        else:
-            return 13
-
 def get_node_on_translation(row):
     if   row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
         return 1
@@ -231,7 +226,7 @@ lsdyna = {
     "t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
     "t_mid_elastics":   {"mid":[], "ro":[], "e":[], "pr":[]},
     "t_cid_exterior":   {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
-    "t_sid_nset":       {"sid":[], "n1":[], "n2":[], "n3":[], "n4":[], "n5":[], "n6":[], "n7":[], "n8":[]},
+    "t_sid_nset":       {"sid":[], "nid":[]},
     "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "sstyp":[], "mstyp":[]},
     "t_bid_rigid":      {},
     "t_bid_node":       {},
@@ -244,19 +239,18 @@ lsdyna = {
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
 
-#print(abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index())
-
-
-#print(abaqus["t_material_name"])
-#print(abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == "S6-50"])
-
 tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index()
 tmp.index = tmp.index + 1
 for secid, row in tmp.iterrows():
     mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == row.material_name].iloc[0]
     lsdyna["t_secid_solid"]["secid"]    += [row.solid_id]
     lsdyna["t_secid_solid"]["title"]    += [row.elset_name]
-    lsdyna["t_secid_solid"]["elform"]   += [get_elform(row.element_type, mat["hyperelastic"])]
+    if row.element_type == "C3D4":
+        if len(mat["hyperelastic"]) == 0:
+            lsdyna["t_secid_solid"]["elform"]   += [10]
+        else:
+            lsdyna["t_secid_solid"]["elform"]   += [13]
+
     lsdyna["t_part_id"]["pid"]          += [row.solid_id]
     lsdyna["t_part_id"]["heading"]      += [row.elset_name]
     lsdyna["t_part_id"]["secid"]        += [row.solid_id]
@@ -288,36 +282,33 @@ for eid, row in abaqus["q_part_component"].iterrows():
         else:
             lsdyna["t_eid"][st] += [row.node_ids[len(row.node_ids) - 1]]
 
-
-
-
-
-
-def node_on_surface(element_type, identification, node_ids):
-    if element_type == "C3D4":
-        if identification == "S1":
-            tmp_nodes = [node_ids[2], node_ids[1], node_ids[0]]
-        elif identification == "S2":
-            tmp_nodes = [node_ids[1], node_ids[3] ,node_ids[0]]
-        elif identification == "S3":
-            tmp_nodes = [node_ids[2], node_ids[3], node_ids[1]]
-        elif identification == "S4":
-            tmp_nodes = [node_ids[0], node_ids[3], node_ids[2]]
-    elif element_type == "S3R":
-        tmp_nodes = [node_ids[0], node_ids[1], node_ids[2]]
-    else:
-        return
-
-    for index, st in enumerate([col for col in lsdyna["t_sid_segment"].keys()][1:]):
-        lsdyna["t_sid_segment"][st]         += [tmp_nodes[index]]
-    if len(tmp_nodes) < 4:
-        for n in range(len(tmp_nodes), 4):
-            lsdyna["t_sid_segment"][st]         += [tmp_nodes[len(tmp_nodes) - 1]]
-
-
 tmp = pd.merge(abaqus["t_surface_name"], abaqus["t_surface_component"], on='surface_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_segment_component"] = pd.merge(tmp, abaqus["t_element_id"], on='element_id', how='left')
+del tmp
+
+def create_segment(surface_name):
+    for sid, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == surface_name].iterrows():
+        lsdyna["t_sid_segment"]["sid"]   += [row.surface_id]
+        if row.element_type == "C3D4":
+            if row.identification == "S1":
+                tmp_nodes = [row.node_ids[2], row.node_ids[1], row.node_ids[0]]
+            elif row.identification == "S2":
+                tmp_nodes = [row.node_ids[1], row.node_ids[3] ,row.node_ids[0]]
+            elif row.identification == "S3":
+                tmp_nodes = [row.node_ids[2], row.node_ids[3], row.node_ids[1]]
+            elif row.identification == "S4":
+                tmp_nodes = [row.node_ids[0], row.node_ids[3], row.node_ids[2]]
+        elif element_type == "S3R":
+            tmp_nodes = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+        else:
+            tmp_nodes = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+
+        for index, st in enumerate([col for col in lsdyna["t_sid_segment"].keys()][1:]):
+            if index <= len(tmp_nodes) - 1:
+                lsdyna["t_sid_segment"][st]         += [tmp_nodes[index]]
+            else:
+                lsdyna["t_sid_segment"][st]         += [tmp_nodes[len(tmp_nodes) - 1]]
 
 for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
@@ -325,5 +316,18 @@ for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["sstyp"]        += [0]
     lsdyna["t_cid_surface"]["msid"]         += [int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.master_surface]["surface_id"])]
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
+    create_segment(row.slave_surface)
+    create_segment(row.master_surface)
 
-print(lsdyna["t_cid_surface"])
+
+for pid, row in abaqus["t_constraint_name"].iterrows():
+    lsdyna["t_pid_rigid"]["pid"]          += [row.constraint_id]
+    lsdyna["t_pid_rigid"]["cid"]          += [0]    
+    lsdyna["t_pid_rigid"]["nsid"]         += [int(abaqus["t_nset_name"][abaqus["t_nset_name"]["nset_name"] == row.nset_name]["nset_id"])]
+    lsdyna["t_pid_rigid"]["sstyp"]        += [0]
+    lsdyna["t_pid_rigid"]["mstyp"]        += [0]
+
+
+print(create_table(lsdyna["t_pid_rigid"]))
+
+
