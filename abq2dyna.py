@@ -12,6 +12,8 @@ abaqus = {
     "t_nset_component":     {"nset_name":[], "node_id":[]},
     "t_solid_id":           {"solid_id":[], "elset_name":[], "material_name":[]},
     "t_tie_name":           {"tie_id":[], "tie_name":[], "adjust":[], "slave_surface":[], "master_surface":[]},
+    "t_surface_name":       {"surface_id":[], "surface_name":[], "surface_type":[]},
+    "t_surface_component":  {"surface_name":[], "elset_name":[], "identification":[]},
     "t_constraint_name":    {"constraint_id":[], "constraint_name":[], "nset_name":[], "surface_name":[]},
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
     "t_transform_name":     {"nset_name":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
@@ -87,12 +89,17 @@ for line in lines:
             abaqus["t_tie_name"]["tie_id"]                  += [len(abaqus["t_tie_name"]["tie_id"])]
             abaqus["t_tie_name"]["tie_name"]                += [get_name("name", spdata)]
             abaqus["t_tie_name"]["adjust"]                  += [get_bool("adjust", spdata, True)]
+        elif "*Surface" == keyword:
+            surface_name = get_name("name", spdata)
+            abaqus["t_surface_name"]["surface_id"]          += [len(abaqus["t_surface_name"]["surface_id"]) + 1]
+            abaqus["t_surface_name"]["surface_name"]        += [surface_name]
+            abaqus["t_surface_name"]["surface_type"]        += [get_name("type", spdata)]
         elif "*Transform" == keyword:
             abaqus["t_transform_name"]["nset_name"]         += [get_name("nset", spdata)]
             abaqus["t_transform_name"]["type"]              += [get_name("type", spdata)]
         elif "*Material" == keyword:
             material_name = get_name("name", spdata)
-            abaqus["t_material_name"]["material_id"]        += [len(abaqus["t_material_name"]["material_id"])]
+            abaqus["t_material_name"]["material_id"]        += [len(abaqus["t_material_name"]["material_id"]) + 1]
             abaqus["t_material_name"]["material_name"]      += [material_name]
             abaqus["t_material_name"]["hyperelastic"]       += [[]]
             for col in [st for st in abaqus["t_material_name"].keys()][3:]:
@@ -119,8 +126,12 @@ for line in lines:
         abaqus["t_element_component"]["element_id"]      += [int(spdata[0])  for st in spdata[1:]]
         abaqus["t_element_component"]["node_id"]         += [int(st) for st in spdata[1:]]
     elif keyword == "*Tie":  
-        abaqus["t_tie_name"]["slave_surface"]          += [spdata[0]]
-        abaqus["t_tie_name"]["master_surface"]         += [spdata[1]]
+        abaqus["t_tie_name"]["slave_surface"]            += [str(spdata[0])]
+        abaqus["t_tie_name"]["master_surface"]           += [str(spdata[1])]
+    elif keyword == "*Surface":  
+        abaqus["t_surface_component"]["surface_name"]    += [surface_name]
+        abaqus["t_surface_component"]["elset_name"]      += [str(spdata[0])]
+        abaqus["t_surface_component"]["identification"]  += [str(spdata[1])]
     elif keyword == "*Elset":        
         if elset_generate:
             abaqus["t_elset_component"]["elset_name"]    += [elset_name  for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
@@ -167,18 +178,7 @@ for st in abaqus.keys():
 
 
 #Convert .k 
-def get_node_on_surface(element_type, identification, node_ids):
-    if element_type == "C3D4":
-        if identification == "S1":
-            return [node_ids[2], node_ids[1], node_ids[0]]
-        elif identification == "S2":
-            return [node_ids[1], node_ids[3] ,node_ids[0]]
-        elif identification == "S3":
-            return [node_ids[2], node_ids[3], node_ids[1]]
-        elif identification == "S4":
-            return [node_ids[0], node_ids[3], node_ids[2]]
-    elif element_type == "S3R":
-        return [node_ids[0], node_ids[1], node_ids[2]]
+
 
 def get_elform(element_type, ogden):
     if element_type == "C3D4":
@@ -246,22 +246,23 @@ abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_ele
 
 #print(abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index())
 
+
 #print(abaqus["t_material_name"])
 #print(abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == "S6-50"])
 
 tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index()
 tmp.index = tmp.index + 1
-for index, secid in tmp.iterrows():
-    mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == secid.material_name].iloc[0]
-    lsdyna["t_secid_solid"]["secid"]    += [secid.solid_id]
-    lsdyna["t_secid_solid"]["title"]    += [secid.elset_name]
-    lsdyna["t_secid_solid"]["elform"]   += [get_elform(secid.element_type, mat["hyperelastic"])]
-    lsdyna["t_part_id"]["pid"]          += [secid.solid_id]
-    lsdyna["t_part_id"]["heading"]      += [secid.elset_name]
-    lsdyna["t_part_id"]["secid"]        += [secid.solid_id]
+for secid, row in tmp.iterrows():
+    mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == row.material_name].iloc[0]
+    lsdyna["t_secid_solid"]["secid"]    += [row.solid_id]
+    lsdyna["t_secid_solid"]["title"]    += [row.elset_name]
+    lsdyna["t_secid_solid"]["elform"]   += [get_elform(row.element_type, mat["hyperelastic"])]
+    lsdyna["t_part_id"]["pid"]          += [row.solid_id]
+    lsdyna["t_part_id"]["heading"]      += [row.elset_name]
+    lsdyna["t_part_id"]["secid"]        += [row.solid_id]
     lsdyna["t_part_id"]["mid"]          += [mat["material_id"] + 1]
-    lsdyna["t_cid_exterior"]["cid"]     += [secid.solid_id]
-    lsdyna["t_cid_exterior"]["ssid"]    += [secid.solid_id]
+    lsdyna["t_cid_exterior"]["cid"]     += [row.solid_id]
+    lsdyna["t_cid_exterior"]["ssid"]    += [row.solid_id]
     lsdyna["t_cid_exterior"]["msid"]    += [3]
     lsdyna["t_cid_exterior"]["sstyp"]   += [0]
     lsdyna["t_cid_exterior"]["mstyp"]   += [0]
@@ -278,37 +279,51 @@ for index, secid in tmp.iterrows():
         lsdyna["t_mid_elastics"]["pr"]     += [float(mat["poason"])]
 del tmp
 
-for index, eid in abaqus["q_part_component"].iterrows():
-    lsdyna["t_eid"]["eid"]     += [eid.element_id]
-    lsdyna["t_eid"]["pid"]     += [eid.solid_id]
+for eid, row in abaqus["q_part_component"].iterrows():
+    lsdyna["t_eid"]["eid"]     += [row.element_id]
+    lsdyna["t_eid"]["pid"]     += [row.solid_id]
     for n, st in enumerate([col for col in lsdyna["t_eid"].keys()][2:]):
-        if len(eid.node_ids) >= n + 1:
-            lsdyna["t_eid"][st] += [eid.node_ids[n]]
+        if len(row.node_ids) >= n + 1:
+            lsdyna["t_eid"][st] += [row.node_ids[n]]
         else:
-            lsdyna["t_eid"][st] += [eid.node_ids[len(eid.node_ids) - 1]]
-
-
-for index, cid in abaqus["t_tie_name"].iterrows():
+            lsdyna["t_eid"][st] += [row.node_ids[len(row.node_ids) - 1]]
 
 
 
 
 
 
+def node_on_surface(element_type, identification, node_ids):
+    if element_type == "C3D4":
+        if identification == "S1":
+            tmp_nodes = [node_ids[2], node_ids[1], node_ids[0]]
+        elif identification == "S2":
+            tmp_nodes = [node_ids[1], node_ids[3] ,node_ids[0]]
+        elif identification == "S3":
+            tmp_nodes = [node_ids[2], node_ids[3], node_ids[1]]
+        elif identification == "S4":
+            tmp_nodes = [node_ids[0], node_ids[3], node_ids[2]]
+    elif element_type == "S3R":
+        tmp_nodes = [node_ids[0], node_ids[1], node_ids[2]]
+    else:
+        return
+
+    for index, st in enumerate([col for col in lsdyna["t_sid_segment"].keys()][1:]):
+        lsdyna["t_sid_segment"][st]         += [tmp_nodes[index]]
+    if len(tmp_nodes) < 4:
+        for n in range(len(tmp_nodes), 4):
+            lsdyna["t_sid_segment"][st]         += [tmp_nodes[len(tmp_nodes) - 1]]
 
 
+tmp = pd.merge(abaqus["t_surface_name"], abaqus["t_surface_component"], on='surface_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_elset_component"], on='elset_name', how='left')
+abaqus["q_segment_component"] = pd.merge(tmp, abaqus["t_element_id"], on='element_id', how='left')
 
+for tie, row in abaqus["t_tie_name"].iterrows():
+    lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
+    lsdyna["t_cid_surface"]["ssid"]         += [int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.slave_surface]["surface_id"])]
+    lsdyna["t_cid_surface"]["sstyp"]        += [0]
+    lsdyna["t_cid_surface"]["msid"]         += [int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.master_surface]["surface_id"])]
+    lsdyna["t_cid_surface"]["mstyp"]        += [0]
 
-
-
-
-
-
-
-
-
-
-
-
-print(create_table(lsdyna["t_eid"]))
-
+print(lsdyna["t_cid_surface"])
