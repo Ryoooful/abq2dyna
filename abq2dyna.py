@@ -147,12 +147,12 @@ for line in lines:
             abaqus["t_nset_component"]["node_id"]        += [int(st)    for st in range(int(spdata[0]), int(spdata[1]) + int(spdata[2]), int(spdata[2]))]
         else:
             for st in spdata:
-                if st.isdecimal():
+                if st.isdecimal() and st != "":
                     abaqus["t_nset_component"]["nset_name"]      += [nset_name]
                     abaqus["t_nset_component"]["node_id"]        += [int(st)]
                 else:
                     tmp = create_table(abaqus["t_nset_component"])
-                    for index, row in tmp[tmp["nset_name"] == nset_name].reset_index().iterrows():
+                    for index, row in tmp[tmp["nset_name"] == st].reset_index().iterrows():
                         abaqus["t_nset_component"]["nset_name"]  += [nset_name]
                         abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
                     del tmp
@@ -226,11 +226,13 @@ lsdyna = {
     "t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
     "t_mid_elastics":   {"mid":[], "ro":[], "e":[], "pr":[]},
     "t_cid_exterior":   {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
-    "t_sid_nset":       {"sid":[], "nid":[]},
+    "t_sid":            {"sid":[], "type":[]},
+    "t_sid_component":  {"sid":[], "nid":[]},
     "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "sstyp":[], "mstyp":[]},
     "t_bid_rigid":      {},
     "t_bid_node":       {},
-    "t_lcid":           {},
+    "t_lcid":           {"lcid":[]},
+    "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]},
     "t_sid_segment":    {"sid":[], "nid1":[], "nid2":[], "nid3":[], "nid4":[]},
     "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
     "t_vid":            {}
@@ -273,6 +275,7 @@ for secid, row in tmp.iterrows():
         lsdyna["t_mid_elastics"]["pr"]     += [float(mat["poason"])]
 del tmp
 
+
 for eid, row in abaqus["q_part_component"].iterrows():
     lsdyna["t_eid"]["eid"]     += [row.element_id]
     lsdyna["t_eid"]["pid"]     += [row.solid_id]
@@ -287,47 +290,58 @@ tmp = pd.merge(tmp, abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_segment_component"] = pd.merge(tmp, abaqus["t_element_id"], on='element_id', how='left')
 del tmp
 
-def create_segment(surface_name):
-    for sid, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == surface_name].iterrows():
-        lsdyna["t_sid_segment"]["sid"]   += [row.surface_id]
+def create_set_node_from_surface(surface_id, set_type):
+    lsdyna["t_sid"]["sid"]                 += [surface_id]
+    lsdyna["t_sid"]["type"]                += [set_type]
+    for sid, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_id"] == surface_id].iterrows():
         if row.element_type == "C3D4":
             if row.identification == "S1":
-                tmp_nodes = [row.node_ids[2], row.node_ids[1], row.node_ids[0]]
+                plane = [row.node_ids[2], row.node_ids[1], row.node_ids[0]]
             elif row.identification == "S2":
-                tmp_nodes = [row.node_ids[1], row.node_ids[3] ,row.node_ids[0]]
+                plane = [row.node_ids[1], row.node_ids[3] ,row.node_ids[0]]
             elif row.identification == "S3":
-                tmp_nodes = [row.node_ids[2], row.node_ids[3], row.node_ids[1]]
+                plane = [row.node_ids[2], row.node_ids[3], row.node_ids[1]]
             elif row.identification == "S4":
-                tmp_nodes = [row.node_ids[0], row.node_ids[3], row.node_ids[2]]
+                plane = [row.node_ids[0], row.node_ids[3], row.node_ids[2]]
         elif element_type == "S3R":
-            tmp_nodes = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+            plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
         else:
-            tmp_nodes = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+            plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
 
-        for index, st in enumerate([col for col in lsdyna["t_sid_segment"].keys()][1:]):
-            if index <= len(tmp_nodes) - 1:
-                lsdyna["t_sid_segment"][st]         += [tmp_nodes[index]]
-            else:
-                lsdyna["t_sid_segment"][st]         += [tmp_nodes[len(tmp_nodes) - 1]]
+        for index, nid in plane
+            lsdyna["t_sid_component"]["sid"]   += [surface_id]
+            lsdyna["t_sid_component"]["nid"]   += [nid]
 
 for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
-    lsdyna["t_cid_surface"]["ssid"]         += [int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.slave_surface]["surface_id"])]
+    
+    sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.slave_surface]["surface_id"])
+    lsdyna["t_cid_surface"]["ssid"]         += [sid]
     lsdyna["t_cid_surface"]["sstyp"]        += [0]
-    lsdyna["t_cid_surface"]["msid"]         += [int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.master_surface]["surface_id"])]
+    create_set_node_from_surface(sid, "segment")
+    
+    sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.master_surface]["surface_id"])
+    lsdyna["t_cid_surface"]["msid"]         += [sid]
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
-    create_segment(row.slave_surface)
-    create_segment(row.master_surface)
+    create_set_node_from_surface(sid, "segment")
 
 
 for pid, row in abaqus["t_constraint_name"].iterrows():
     lsdyna["t_pid_rigid"]["pid"]          += [row.constraint_id]
-    lsdyna["t_pid_rigid"]["cid"]          += [0]    
-    lsdyna["t_pid_rigid"]["nsid"]         += [int(abaqus["t_nset_name"][abaqus["t_nset_name"]["nset_name"] == row.nset_name]["nset_id"])]
+    lsdyna["t_pid_rigid"]["cid"]          += [0]
+    sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.surface_name]["surface_id"])
+    lsdyna["t_pid_rigid"]["nsid"]         += [sid]
     lsdyna["t_pid_rigid"]["sstyp"]        += [0]
     lsdyna["t_pid_rigid"]["mstyp"]        += [0]
+    create_set_node_from_surface(sid, "node")
 
 
-print(create_table(lsdyna["t_pid_rigid"]))
+abaqus["q_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_nset_component"], on='nset_name', how='left')
 
+#for id, row in abaqus["q_transform_component"].iterrows():
+#    lsdyna[]
+
+
+abaqus["q_segment_component"].to_csv(r"C:\Users\Ryoooful\OneDrive\Desktop\q_segment_component.csv")
+#create_table(lsdyna["t_pid_rigid"]).to_csv(r"C:\Users\Ryoooful\OneDrive\Desktop\t_pid_rigid.csv")
 
