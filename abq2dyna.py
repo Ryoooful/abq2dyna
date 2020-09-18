@@ -1,6 +1,6 @@
 import pandas as pd
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
+output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
 abaqus = {
@@ -402,6 +402,28 @@ with open(output_path, mode='w') as f:
         f.write("\n")
     #"t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
 
+    for sid, row in lsdyna["t_sid"].iterrows():
+        if row.type == "segment":
+            f.write("*SET_SEGMENT\n")
+            f.write('{0: > #10}'.format(row.sid))
+            element_id = 0
+            #lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].to_csv(r"C:\Users\1080045106\Desktop\t_sid_component.csv")
+            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].iterrows():
+                if element_id != row.element_id:
+                    element_id = row.element_id
+                    f.write("\n")
+                f.write('{0: > #10}'.format(row.nid))
+            f.write("\n")
+            
+        elif row.type == "node":
+            f.write("*SET_NODE\n")
+            f.write('{0: > #10}'.format(row.sid))
+            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].reset_index.iterrows():
+                if index % 8 == 0: 
+                    f.write("\n")
+                f.write('{0: > #10}'.format(row.nid))
+            f.write("\n")
+
     f.write("*ELEMENT_SOLID\n")
     for pid, row in lsdyna["t_eid"].iterrows():
         f.write('{0: > #8}'.format(row.eid))
@@ -416,7 +438,6 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #8}'.format(row.n7))
         f.write('{0: > #8}'.format(row.n8))
         f.write("\n")
-
 
     f.write("*Node\n")
     for pid, row in lsdyna["t_nid"].iterrows():
