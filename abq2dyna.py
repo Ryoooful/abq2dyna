@@ -1,7 +1,7 @@
 import pandas as pd
-import numpy as np
+
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
+output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
 abaqus = {
@@ -68,7 +68,7 @@ for line in lines:
             abaqus["t_solid_id"]["elset_name"]              += [get_name("elset", spdata)]
             abaqus["t_solid_id"]["material_name"]           += [get_name("material", spdata)]
         elif "*Coupling" == keyword:
-            abaqus["t_constraint_name"]["constraint_id"]    += [len(abaqus["t_constraint_name"]["constraint_id"])]
+            abaqus["t_constraint_name"]["constraint_id"]    += [len(abaqus["t_constraint_name"]["constraint_id"]) + 1]
             abaqus["t_constraint_name"]["constraint_name"]  += [get_name("constraint name", spdata)]
             abaqus["t_constraint_name"]["nset_name"]        += [get_name("ref node", spdata)]
             abaqus["t_constraint_name"]["surface_name"]     += [get_name("surface", spdata)]
@@ -191,46 +191,10 @@ for line in lines:
 
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
-    
+
+
 
 #Convert .k 
-
-
-def get_node_on_translation(row):
-    if   row.u1 == 1 and row.u2 == 0 and row.u3 == 0:
-        return 1
-    elif row.u1 == 0 and row.u2 == 1 and row.u3 == 0:
-        return 2
-    elif row.u1 == 0 and row.u2 == 0 and row.u3 == 1:
-        return 3
-    elif row.u1 == 1 and row.u2 == 1 and row.u3 == 0:
-        return 4
-    elif row.u1 == 0 and row.u2 == 1 and row.u3 == 1:
-        return 5
-    elif row.u1 == 1 and row.u2 == 0 and row.u3 == 1:
-        return 6
-    elif row.u1 == 1 and row.u2 == 1 and row.u3 == 1:
-        return 7
-    else:
-        return 0
-
-def get_node_on_rotaion(row):
-    if   row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 0:
-        return 1
-    elif row.ur1 == 0 and row.ur2 == 1 and row.ur3 == 0:
-        return 2
-    elif row.ur1 == 0 and row.ur2 == 0 and row.ur3 == 1:
-        return 3
-    elif row.ur1 == 1 and row.ur2 == 1 and row.ur3 == 0:
-        return 4
-    elif row.ur1 == 0 and row.ur2 == 1 and row.ur3 == 1:
-        return 5
-    elif row.ur1 == 1 and row.ur2 == 0 and row.ur3 == 1:
-        return 6
-    elif row.ur1 == 1 and row.ur2 == 1 and row.ur3 == 1:
-        return 7
-    else:
-        return 0
 
 lsdyna = {
     "t_nid":            {"nid":[], "x":[], "y":[], "z":[], "tc":[], "rc":[]},
@@ -239,7 +203,7 @@ lsdyna = {
     "t_part_id":        {"pid":[], "heading":[], "secid":[], "mid":[]},
     "t_mid_ogden":      {"mid":[], "title":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
     "t_mid_elastics":   {"mid":[], "title":[], "ro":[], "e":[], "pr":[]},
-    "t_cid_exterior":   {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
+    "t_cid_exterior":   {"cid":[], "ssid":[], "sstyp":[]},
     "t_sid":            {"sid":[], "type":[]},
     "t_sid_component":  {"sid":[], "element_id":[], "nid":[]},
     "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "sstyp":[], "mstyp":[]},
@@ -250,6 +214,7 @@ lsdyna = {
         }
     # "t_lcid":           {"lcid":[]},
     # "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]},
+
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
 
@@ -268,21 +233,19 @@ for secid, row in tmp.iterrows():
     lsdyna["t_part_id"]["pid"]          += [row.solid_id]
     lsdyna["t_part_id"]["heading"]      += [row.elset_name]
     lsdyna["t_part_id"]["secid"]        += [row.solid_id]
-    lsdyna["t_part_id"]["mid"]          += [mat["material_id"] + 1]
+    lsdyna["t_part_id"]["mid"]          += [mat["material_id"]]
     lsdyna["t_cid_exterior"]["cid"]     += [row.solid_id]
     lsdyna["t_cid_exterior"]["ssid"]    += [row.solid_id]
-    lsdyna["t_cid_exterior"]["msid"]    += [3]
-    lsdyna["t_cid_exterior"]["sstyp"]   += [0]
-    lsdyna["t_cid_exterior"]["mstyp"]   += [0]
+    lsdyna["t_cid_exterior"]["sstyp"]   += [3]
     if len(mat["hyperelastic"]) > 1:
-        lsdyna["t_mid_ogden"]["mid"]    += [mat["material_id"] + 1]
+        lsdyna["t_mid_ogden"]["mid"]    += [mat["material_id"]]
         lsdyna["t_mid_ogden"]["title"]  += [mat["material_name"]]
         lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_ogden"]["pr"]     += [0.499]
         for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][4:]):
             lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
     else:
-        lsdyna["t_mid_elastics"]["mid"]    += [mat["material_id"] + 1]
+        lsdyna["t_mid_elastics"]["mid"]    += [mat["material_id"]]
         lsdyna["t_mid_elastics"]["title"]  += [mat["material_name"]]
         lsdyna["t_mid_elastics"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_elastics"]["e"]      += [float(mat["young"])]
@@ -332,23 +295,7 @@ def create_set_node_from_surface(surface_id, set_type):
                 lsdyna["t_sid_component"]["element_id"]    += [row.element_id]
                 lsdyna["t_sid_component"]["nid"]           += [plane[len(plane) - 1]]
         
-def get_node_on_translation(freedom1, freemdom2, freedom3):
-    if freedom1 == 1 and freedom2 == 0 and freedom3 == 0:
-        return 1
-    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 0:
-        return 2
-    elif freedom1 == 0 and freedom2 == 0 and freedom3 == 1:
-        return 3
-    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 0:
-        return 4
-    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 1:
-        return 5
-    elif freedom1 == 1 and freedom2 == 0 and freedom3 == 1:
-        return 6
-    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 1:
-        return 7
-    else:
-        return 0
+
     
 for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
@@ -371,12 +318,16 @@ for pid, row in abaqus["t_constraint_name"].iterrows():
     lsdyna["t_pid_rigid"]["nsid"]         += [sid]
     lsdyna["t_pid_rigid"]["sstyp"]        += [0]
     lsdyna["t_pid_rigid"]["mstyp"]        += [0]
+    nid = int(abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == row.nset_name].iloc[0]["node_id"])
+    lsdyna["t_sid_component"]["sid"]           += [sid]
+    lsdyna["t_sid_component"]["element_id"]    += [None]
+    lsdyna["t_sid_component"]["nid"]           += [nid]
     create_set_node_from_surface(sid, "node")
     lsdyna["t_bid_rigid"]["pid"]          += [row.constraint_id]
-    lsdyna["t_bid_rigid"]["dof"]          += [row.constraint_id]
-    lsdyna["t_bid_rigid"]["vad"]       += [1]
-    lsdyna["t_bid_rigid"]["lcid"]      += [2]
-    lsdyna["t_bid_rigid"]["vid"]       += [None]
+    lsdyna["t_bid_rigid"]["dof"]          += [1]   ##POINT
+    lsdyna["t_bid_rigid"]["vad"]          += [2]   ##POINT
+    lsdyna["t_bid_rigid"]["lcid"]         += [2]   ##POINT
+    lsdyna["t_bid_rigid"]["vid"]          += [None]
 
 tmp = pd.merge(abaqus["t_transform_name"], abaqus["t_nset_component"], on='nset_name', how='left')
 abaqus["q_transform_component"] = pd.merge(tmp, abaqus["t_node_id"], on='node_id', how='left')
@@ -395,28 +346,48 @@ for pid, row in abaqus["q_transform_component"].sort_values("node_id").iterrows(
         lsdyna["t_vid"]["xt"]             += [row.x]
         lsdyna["t_vid"]["yt"]             += [row.y]
         lsdyna["t_vid"]["zt"]             += [row.z]
-        lsdyna["t_vid"]["xh"]             += [row.x * 2]
-        lsdyna["t_vid"]["yh"]             += [row.y * 2]
+        lsdyna["t_vid"]["xh"]             += [row.x * 1.1]  #point
+        lsdyna["t_vid"]["yh"]             += [row.y * 1.1]
         lsdyna["t_vid"]["zh"]             += [row.z]
-        
+
+def get_node_on_translation(freedom1, freedom2, freedom3):
+    if freedom1 == 1 and freedom2 == 0 and freedom3 == 0:
+        return 1
+    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 0:
+        return 2
+    elif freedom1 == 0 and freedom2 == 0 and freedom3 == 1:
+        return 3
+    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 0:
+        return 4
+    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 1:
+        return 5
+    elif freedom1 == 1 and freedom2 == 0 and freedom3 == 1:
+        return 6
+    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 1:
+        return 7
+    else:
+        return 0
+
 tmp = pd.merge(abaqus["t_step_name"][abaqus["t_step_name"]["step_id"] == 1], abaqus["t_boundary_id"], on='step_name', how='left')
 tmp = pd.merge(tmp , abaqus["t_nset_component"], on='nset_name', how='left')
-abaqus["q_boundary_component"] = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left')
+tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
+abaqus["q_boundary_component"] = tmp.groupby("node_id").max()
+del tmp
 
-for nid, row in abaqus["t_node_id"].iterrows():
-    lsdyna["t_nid"]["nid"]  += [row.node_id]
+for nid, row in abaqus["q_boundary_component"].iterrows():
+    lsdyna["t_nid"]["nid"]  += [nid]
     lsdyna["t_nid"]["x"]    += [row.x]
     lsdyna["t_nid"]["y"]    += [row.y]
     lsdyna["t_nid"]["z"]    += [row.z]
-    lsdyna["t_nid"]["tc"]   += [0]
-    lsdyna["t_nid"]["rc"]   += [0]
+    lsdyna["t_nid"]["tc"]   += [get_node_on_translation(row.u1, row.u2, row.u3)]
+    lsdyna["t_nid"]["rc"]   += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
 
 
 for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
 
 
-
+#write dyna file
 
 with open(output_path, mode='w') as f:
     f.write("*SECTION_SOLID_TITLE\n")
@@ -430,6 +401,7 @@ with open(output_path, mode='w') as f:
     f.write("*PART\n")
     for pid, row in lsdyna["t_part_id"].iterrows():
         f.write(row.heading + "\n")
+        f.write('{0: > #10}'.format(row.pid))
         f.write('{0: > #10}'.format(row.secid))
         f.write('{0: > #10}'.format(row.mid))
         f.write("\n")
@@ -440,9 +412,9 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.cid))
         f.write("\n")
         f.write('{0: > #10}'.format(row.ssid))
-        f.write('{0: > #10}'.format(row.msid))
+        f.write("          ")
         f.write('{0: > #10}'.format(row.sstyp))
-        f.write('{0: > #10}'.format(row.mstyp))
+        f.write("          ")
         f.write("\n")
         f.write('{0: > #10}'.format(0.1))
         f.write('{0: > #10}'.format(0.1))
@@ -486,7 +458,7 @@ with open(output_path, mode='w') as f:
         elif row.type == "node":
             f.write("*SET_NODE\n")
             f.write('{0: > #10}'.format(row.sid))
-            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].sort_values("nid").reset_index().iterrows():
+            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].reset_index().iterrows():
                 if index % 8 == 0: 
                     f.write("\n")
                 f.write('{0: > #10}'.format(row.nid))
@@ -515,9 +487,6 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(5))
         f.write('{0: > #10}'.format(7))
         f.write("\n")
-    
-    
-    
     
     for nid, row in lsdyna["t_bid_node"].iterrows():
         f.write("*BOUNDARY_PRESCRIBED_MOTION_NODE\n")
@@ -575,10 +544,6 @@ with open(output_path, mode='w') as f:
         f.write('{0:0< #16f}'.format(float(row.tc)))
         f.write('{0:0< #16f}'.format(float(row.rc)))
         f.write("\n")
-#pd = create_table(lsdyna["t_sid_component"])
-
-#abaqus["q_segment_component"].to_csv(r"C:\Users\Ryoooful\OneDrive\Desktop\q_segment_component.csv")
-#create_table(lsdyna["t_sid_component"]).to_csv(r"C:\Users\Ryoooful\OneDrive\Desktop\t_sid_component.csv")
 
 
 print("end")
