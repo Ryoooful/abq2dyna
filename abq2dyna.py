@@ -1,7 +1,7 @@
 import pandas as pd
 
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dyna.key"
+output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\aaaa.key"
 keyword = ""
 
 abaqus = {
@@ -19,10 +19,11 @@ abaqus = {
     "t_constraint_name":    {"constraint_id":[], "constraint_name":[], "nset_name":[], "surface_name":[]},
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
     "t_transform_name":     {"nset_name":[], "transform_id":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
+    "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[]},
+    "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}, 
-    "t_boundary_id":        {"boundary_id":[], "step_name":[], "amplitude":[], "nset_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[], "val1":[], "val2":[], "val3":[], "val4":[], "val5":[], "val6":[]}
+    "t_boundary_id":        {"boundary_id":[], "step_name":[], "amplitude_name":[], "nset_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[], "val1":[], "val2":[], "val3":[], "val4":[], "val5":[], "val6":[]}
         }
-    # "linerbulk":[], "quadraticbulk":[]
 
 def get_name(name_label, spdata):
     for sp in spdata[1:]:
@@ -40,8 +41,6 @@ def get_bool(label, spdata, yesno):
             if label == sp:
                 return True
     return False
-
-
 
 def create_table(table):
     return pd.DataFrame(data=table, columns=table.keys())
@@ -117,10 +116,14 @@ for line in lines:
         elif "*Boundary" == keyword:
             abaqus["t_boundary_id"]["boundary_id"]          += [len(abaqus["t_boundary_id"]["boundary_id"]) + 1]
             abaqus["t_boundary_id"]["step_name"]            += [step_name]
-            abaqus["t_boundary_id"]["amplitude"]            += [get_name("amplitude", spdata)]
+            abaqus["t_boundary_id"]["amplitude_name"]            += [get_name("amplitude", spdata)]
             abaqus["t_boundary_id"]["nset_name"]            += [""]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
-                abaqus["t_boundary_id"][col] += [0]                
+                abaqus["t_boundary_id"][col] += [0]
+        elif "*Amplitude" == keyword:
+            amplitude_name = get_name("name", spdata)
+            abaqus["t_amplitude_name"]["amplitude_id"]                += [len(abaqus["t_amplitude_name"]["amplitude_id"]) + 1]
+            abaqus["t_amplitude_name"]["amplitude_name"]              += [amplitude_name]
         elif "*End Step" == keyword: 
             step_name = ""
 
@@ -187,11 +190,14 @@ for line in lines:
         abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 3]][-1] = 1
         if len(spdata) == 4:
             abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 9]][-1] = float(spdata[3])
-    
+    elif keyword == "*Amplitude": 
+        for n in range(0, len(spdata), 2):
+            abaqus["t_amplitude_component"]["amplitude_name"] += [amplitude_name]
+            abaqus["t_amplitude_component"]["time"]           += [float(spdata[n])]
+            abaqus["t_amplitude_component"]["step"]           += [float(spdata[n + 1])]
 
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
-
 
 
 #Convert .k 
@@ -296,7 +302,7 @@ def create_set_node_from_surface(surface_id, set_type):
                 lsdyna["t_sid_component"]["nid"]           += [plane[len(plane) - 1]]
         
 
-    
+
 for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
     
@@ -324,7 +330,7 @@ for pid, row in abaqus["t_constraint_name"].iterrows():
     lsdyna["t_sid_component"]["nid"]           += [nid]
     create_set_node_from_surface(sid, "node")
     lsdyna["t_bid_rigid"]["pid"]          += [row.constraint_id]
-    lsdyna["t_bid_rigid"]["dof"]          += [1]   ##POINT
+    lsdyna["t_bid_rigid"]["dof"]          += [1]   
     lsdyna["t_bid_rigid"]["vad"]          += [2]   ##POINT
     lsdyna["t_bid_rigid"]["lcid"]         += [2]   ##POINT
     lsdyna["t_bid_rigid"]["vid"]          += [None]
@@ -338,17 +344,17 @@ for pid, row in abaqus["q_transform_component"].sort_values("node_id").iterrows(
         vid = len(lsdyna["t_vid"]["vid"]) + 1
         lsdyna["t_bid_node"]["nid"]       += [row.node_id]
         lsdyna["t_bid_node"]["dof"]       += [-4]
-        lsdyna["t_bid_node"]["vad"]       += [2]
-        lsdyna["t_bid_node"]["lcid"]      += [2]
+        lsdyna["t_bid_node"]["vad"]       += [2]    ##POINT
+        lsdyna["t_bid_node"]["lcid"]      += [2]    ##POINT
         lsdyna["t_bid_node"]["sf"]        += [0]
         lsdyna["t_bid_node"]["vid"]       += [vid]
         lsdyna["t_vid"]["vid"]            += [vid]
         lsdyna["t_vid"]["xt"]             += [row.x]
         lsdyna["t_vid"]["yt"]             += [row.y]
         lsdyna["t_vid"]["zt"]             += [row.z]
-        lsdyna["t_vid"]["xh"]             += [row.x * 1.1]  #point
-        lsdyna["t_vid"]["yh"]             += [row.y * 1.1]
-        lsdyna["t_vid"]["zh"]             += [row.z]
+        lsdyna["t_vid"]["xh"]             += [row.x * 1.1]  ##POINT
+        lsdyna["t_vid"]["yh"]             += [row.y * 1.1]  ##POINT
+        lsdyna["t_vid"]["zh"]             += [row.z]        ##POINT
 
 def get_node_on_translation(freedom1, freedom2, freedom3):
     if freedom1 == 1 and freedom2 == 0 and freedom3 == 0:
