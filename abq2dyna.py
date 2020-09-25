@@ -1,7 +1,7 @@
 import pandas as pd
-
+import sys
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\aaaa.key"
+output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
 abaqus = {
@@ -22,9 +22,10 @@ abaqus = {
     "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}, 
-    "t_boundary_id":        {"boundary_id":[], "step_name":[], "amplitude_name":[], "nset_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[], "val1":[], "val2":[], "val3":[], "val4":[], "val5":[], "val6":[]}
+    "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[]},
+    "t_boundary_component": {"boundary_id":[], "freedom":[], "amount":[]}
         }
-
+#"t_boundary_id":        {"boundary_id":[], "step_name":[], "amplitude_name":[], "nset_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[], "val1":[], "val2":[], "val3":[], "val4":[], "val5":[], "val6":[]}
 def get_name(name_label, spdata):
     for sp in spdata[1:]:
         if name_label + "=" in sp:
@@ -114,12 +115,14 @@ for line in lines:
             abaqus["t_step_name"]["step_id"]                += [len(abaqus["t_step_name"]["step_id"]) + 1]
             abaqus["t_step_name"]["step_name"]              += [step_name]
         elif "*Boundary" == keyword:
-            abaqus["t_boundary_id"]["boundary_id"]          += [len(abaqus["t_boundary_id"]["boundary_id"]) + 1]
+            boundary_id = len(abaqus["t_boundary_id"]["boundary_id"]) + 1
+            abaqus["t_boundary_id"]["boundary_id"]          += [boundary_id]
             abaqus["t_boundary_id"]["step_name"]            += [step_name]
-            abaqus["t_boundary_id"]["amplitude_name"]            += [get_name("amplitude", spdata)]
             abaqus["t_boundary_id"]["nset_name"]            += [""]
+            abaqus["t_boundary_id"]["amplitude_name"]       += [get_name("amplitude", spdata)]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
                 abaqus["t_boundary_id"][col] += [0]
+
         elif "*Amplitude" == keyword:
             amplitude_name = get_name("name", spdata)
             abaqus["t_amplitude_name"]["amplitude_id"]                += [len(abaqus["t_amplitude_name"]["amplitude_id"]) + 1]
@@ -186,10 +189,15 @@ for line in lines:
         abaqus["t_material_name"]["hyperelastic"][len(abaqus["t_material_name"]["hyperelastic"]) - 1]     = [float(st) for st in spdata[:6]]
         keyword = ""
     elif keyword == "*Boundary": 
-        abaqus["t_boundary_id"]["nset_name"][-1] = spdata[0]
-        abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 3]][-1] = 1
+        abaqus["t_boundary_id"]["nset_name"][-1]         =  spdata[0]
+        abaqus["t_boundary_component"]["boundary_id"]     += [boundary_id]
+        abaqus["t_boundary_component"]["freedom"]       += [spdata[1]]
+        #abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 3]][-1] = 1
         if len(spdata) == 4:
-            abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 9]][-1] = float(spdata[3])
+            abaqus["t_boundary_component"]["amount"]    += [float(spdata[3])]
+            #abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 9]][-1] = float(spdata[3])
+        else:
+            abaqus["t_boundary_component"]["amount"]    += [None]
     elif keyword == "*Amplitude": 
         for n in range(0, len(spdata), 2):
             abaqus["t_amplitude_component"]["amplitude_name"] += [amplitude_name]
@@ -200,7 +208,9 @@ for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
 
+#sys.exit()
 #Convert .k 
+
 
 lsdyna = {
     "t_nid":            {"nid":[], "x":[], "y":[], "z":[], "tc":[], "rc":[]},
@@ -301,8 +311,6 @@ def create_set_node_from_surface(surface_id, set_type):
                 lsdyna["t_sid_component"]["element_id"]    += [row.element_id]
                 lsdyna["t_sid_component"]["nid"]           += [plane[len(plane) - 1]]
         
-
-
 for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["cid"]          += [tie + 1]    
     
@@ -315,6 +323,14 @@ for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["msid"]         += [sid]
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
     create_set_node_from_surface(sid, "segment")
+
+
+
+
+
+
+
+
 
 
 for pid, row in abaqus["t_constraint_name"].iterrows():
@@ -374,8 +390,17 @@ def get_node_on_translation(freedom1, freedom2, freedom3):
     else:
         return 0
 
-tmp = pd.merge(abaqus["t_step_name"][abaqus["t_step_name"]["step_id"] == 1], abaqus["t_boundary_id"], on='step_name', how='left')
-tmp = pd.merge(tmp , abaqus["t_nset_component"], on='nset_name', how='left')
+
+tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
+tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
+tmp = tmp[~tmp.duplicated()]
+
+for index, row in abaqus["t_boundary_id"].iterrows():
+    for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
+        abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
+del tmp
+
+tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_nset_component"], on='nset_name', how='left')
 tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
 abaqus["q_boundary_component"] = tmp.groupby("node_id").max()
 del tmp
@@ -391,6 +416,21 @@ for nid, row in abaqus["q_boundary_component"].iterrows():
 
 for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #write dyna file
