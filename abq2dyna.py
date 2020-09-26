@@ -1,7 +1,8 @@
 import pandas as pd
 import sys
+
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dyna.key"
+output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
 keyword = ""
 
 abaqus = {
@@ -18,7 +19,8 @@ abaqus = {
     "t_surface_component":  {"surface_name":[], "elset_name":[], "identification":[]},
     "t_constraint_name":    {"constraint_id":[], "constraint_name":[], "nset_name":[], "surface_name":[]},
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
-    "t_transform_name":     {"nset_name":[], "transform_id":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
+    "t_transform_name":     {"transform_name":[], "transform_id":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
+    "t_transform_component":{"transform_name":[], "nset_name":[]},
     "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}, 
@@ -100,7 +102,7 @@ for line in lines:
             abaqus["t_surface_name"]["surface_name"]        += [surface_name]
             abaqus["t_surface_name"]["surface_type"]        += [get_name("type", spdata)]
         elif "*Transform" == keyword:
-            abaqus["t_transform_name"]["nset_name"]         += [get_name("nset", spdata)]
+            abaqus["t_transform_name"]["transform_name"]         += [get_name("nset", spdata)]
             abaqus["t_transform_name"]["transform_id"]      += [len(abaqus["t_transform_name"]["transform_id"])]
             abaqus["t_transform_name"]["type"]              += [get_name("type", spdata)]
         elif "*Material" == keyword:
@@ -122,7 +124,6 @@ for line in lines:
             abaqus["t_boundary_id"]["amplitude_name"]       += [get_name("amplitude", spdata)]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
                 abaqus["t_boundary_id"][col] += [0]
-
         elif "*Amplitude" == keyword:
             amplitude_name = get_name("name", spdata)
             abaqus["t_amplitude_name"]["amplitude_id"]                += [len(abaqus["t_amplitude_name"]["amplitude_id"]) + 1]
@@ -167,12 +168,14 @@ for line in lines:
                 if st.isdecimal() and st != "":
                     abaqus["t_nset_component"]["nset_name"]      += [nset_name]
                     abaqus["t_nset_component"]["node_id"]        += [int(st)]
-                else:
-                    tmp = create_table(abaqus["t_nset_component"])
-                    for index, row in tmp[tmp["nset_name"] == st].reset_index().iterrows():
-                        abaqus["t_nset_component"]["nset_name"]  += [nset_name]
-                        abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
-                    del tmp
+                elif st != "":
+                    # tmp = create_table(abaqus["t_nset_component"])
+                    # for index, row in tmp[tmp["nset_name"] == st].reset_index().iterrows():
+                    #     abaqus["t_nset_component"]["nset_name"]  += [nset_name]
+                    #     abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
+                    # del tmp
+                    abaqus["t_transform_component"]["transform_name"] += [nset_name]
+                    abaqus["t_transform_component"]["nset_name"]      += [st]
     elif keyword == "*Transform": 
         for index, st in enumerate([col for col in abaqus["t_transform_name"].keys()][3:]):
             abaqus["t_transform_name"][st] += [float(spdata[index - 2])]
@@ -208,7 +211,8 @@ for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
 
-#sys.exit()
+# print(abaqus["t_boundary_component"])
+# sys.exit()
 #Convert .k 
 
 
@@ -222,9 +226,8 @@ lsdyna = {
     "t_cid_exterior":   {"cid":[], "ssid":[], "sstyp":[]},
     "t_sid":            {"sid":[], "type":[]},
     "t_sid_component":  {"sid":[], "element_id":[], "nid":[]},
-    "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "sstyp":[], "mstyp":[]},
-    "t_bid_rigid":      {"pid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
-    "t_bid_node":       {"nid":[], "dof":[], "vad":[], "lcid":[], "sf":[], "vid":[]},
+    "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "cmo":[], "con1":[], "con2":[]},
+    "t_bid_node":       {"nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
     "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
     "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]}
         }
@@ -327,50 +330,30 @@ for tie, row in abaqus["t_tie_name"].iterrows():
 
 
 
+tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
+tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
+tmp = tmp[~tmp.duplicated()]
 
+for index, row in abaqus["t_boundary_id"].iterrows():
+    for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
+        abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
+del tmp
 
+tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_nset_component"], on='nset_name', how='left')
+tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
+abaqus["t_node_id"] = tmp.groupby("node_id").max()
+abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
+del tmp
 
+tmp = abaqus["t_boundary_component"].drop(['freedom'], axis=1).groupby("boundary_id").max().isnull()
+abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], tmp, on='boundary_id', how='left')
+del tmp
 
+abaqus["t_constraint_name"] = pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component"], on='nset_name', how='left')
 
-
-for pid, row in abaqus["t_constraint_name"].iterrows():
-    lsdyna["t_pid_rigid"]["pid"]          += [row.constraint_id]
-    lsdyna["t_pid_rigid"]["cid"]          += [0]
-    sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.surface_name]["surface_id"])
-    lsdyna["t_pid_rigid"]["nsid"]         += [sid]
-    lsdyna["t_pid_rigid"]["sstyp"]        += [0]
-    lsdyna["t_pid_rigid"]["mstyp"]        += [0]
-    nid = int(abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == row.nset_name].iloc[0]["node_id"])
-    lsdyna["t_sid_component"]["sid"]           += [sid]
-    lsdyna["t_sid_component"]["element_id"]    += [None]
-    lsdyna["t_sid_component"]["nid"]           += [nid]
-    create_set_node_from_surface(sid, "node")
-    lsdyna["t_bid_rigid"]["pid"]          += [row.constraint_id]
-    lsdyna["t_bid_rigid"]["dof"]          += [1]   
-    lsdyna["t_bid_rigid"]["vad"]          += [2]   ##POINT
-    lsdyna["t_bid_rigid"]["lcid"]         += [2]   ##POINT
-    lsdyna["t_bid_rigid"]["vid"]          += [None]
-
-tmp = pd.merge(abaqus["t_transform_name"], abaqus["t_nset_component"], on='nset_name', how='left')
-abaqus["q_transform_component"] = pd.merge(tmp, abaqus["t_node_id"], on='node_id', how='left')
-abaqus["q_transform_component"] = abaqus["q_transform_component"][~abaqus["q_transform_component"].duplicated()]
-
-for pid, row in abaqus["q_transform_component"].sort_values("node_id").iterrows():
-    if row.type == "C":
-        vid = len(lsdyna["t_vid"]["vid"]) + 1
-        lsdyna["t_bid_node"]["nid"]       += [row.node_id]
-        lsdyna["t_bid_node"]["dof"]       += [-4]
-        lsdyna["t_bid_node"]["vad"]       += [2]    ##POINT
-        lsdyna["t_bid_node"]["lcid"]      += [2]    ##POINT
-        lsdyna["t_bid_node"]["sf"]        += [0]
-        lsdyna["t_bid_node"]["vid"]       += [vid]
-        lsdyna["t_vid"]["vid"]            += [vid]
-        lsdyna["t_vid"]["xt"]             += [row.x]
-        lsdyna["t_vid"]["yt"]             += [row.y]
-        lsdyna["t_vid"]["zt"]             += [row.z]
-        lsdyna["t_vid"]["xh"]             += [row.x * 1.1]  ##POINT
-        lsdyna["t_vid"]["yh"]             += [row.y * 1.1]  ##POINT
-        lsdyna["t_vid"]["zh"]             += [row.z]        ##POINT
+# tmp = pd.merge(abaqus["t_transform_name"], abaqus["t_nset_component"], on='nset_name', how='left')
+# abaqus["q_transform_component"] = pd.merge(tmp, abaqus["t_node_id"], on='node_id', how='left')
+# abaqus["q_transform_component"] = abaqus["q_transform_component"][~abaqus["q_transform_component"].duplicated()]
 
 def get_node_on_translation(freedom1, freedom2, freedom3):
     if freedom1 == 1 and freedom2 == 0 and freedom3 == 0:
@@ -391,21 +374,51 @@ def get_node_on_translation(freedom1, freedom2, freedom3):
         return 0
 
 
-tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
-tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
-tmp = tmp[~tmp.duplicated()]
+for index, transform in pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left').iterrows():
+    if transform.type == "C":
+        for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == transform.nset_name].iterrows():
+            vid = len(lsdyna["t_vid"]["vid"]) + 1
+            lsdyna["t_bid_node"]["nid"]       += [node.node_id]
+            if node.ur3 == 1:
+                lsdyna["t_bid_node"]["dof"]   += [4]
+            else:
+                lsdyna["t_bid_node"]["dof"]   += [-4]
+            lsdyna["t_bid_node"]["vad"]       += [2]    ##POINT
+            lsdyna["t_bid_node"]["lcid"]      += [2]    ##POINT
+            lsdyna["t_bid_node"]["vid"]       += [vid]
+            lsdyna["t_vid"]["vid"]            += [vid]
+            lsdyna["t_vid"]["xt"]             += [node.x]
+            lsdyna["t_vid"]["yt"]             += [node.y]
+            lsdyna["t_vid"]["zt"]             += [node.z]
+            lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##POINT
+            lsdyna["t_vid"]["yh"]             += [node.y * 1.1]  ##POINT
+            lsdyna["t_vid"]["zh"]             += [node.z]        ##POINT
+    else:
+        if not abaqus["t_boundary_id"][abaqus["t_boundary_id"]["nset_name"] == transform.nset_name].iloc[0]["amount"]:
+            tmp = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == transform.nset_name]
+            if tmp.groupby("nset_name").count().iloc[0]["node_id"] == 1:
+                nid = tmp.iloc[0]["node_id"]
+                for index, row in abaqus["t_constraint_name"][abaqus["t_constraint_name"]["node_id"] == nid].iterrows():
+                    sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.surface_name]["surface_id"])
+                    lsdyna["t_sid_component"]["sid"]           += [sid]
+                    lsdyna["t_sid_component"]["element_id"]    += [None]
+                    lsdyna["t_sid_component"]["nid"]           += [nid]
+                    create_set_node_from_surface(sid, "node")
+                    lsdyna["t_bid_node"]["nid"]                += [nid]
+                    lsdyna["t_bid_node"]["dof"]                += [1] ##POINT motion xyz
+                    lsdyna["t_bid_node"]["vad"]                += [2]
+                    lsdyna["t_bid_node"]["lcid"]               += [0] ##POINT
+                    lsdyna["t_bid_node"]["vid"]                += [0]
+                    lsdyna["t_pid_rigid"]["pid"]               += [row.constraint_id]
+                    lsdyna["t_pid_rigid"]["cid"]               += [0]     
+                    lsdyna["t_pid_rigid"]["nsid"]              += [sid]               
+                    lsdyna["t_pid_rigid"]["cmo"]               += [0]
+                    lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
+                    lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
+            else:
+                print("nset")
 
-for index, row in abaqus["t_boundary_id"].iterrows():
-    for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
-        abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
-del tmp
-
-tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_nset_component"], on='nset_name', how='left')
-tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
-abaqus["q_boundary_component"] = tmp.groupby("node_id").max()
-del tmp
-
-for nid, row in abaqus["q_boundary_component"].iterrows():
+for nid, row in abaqus["t_node_id"].iterrows():
     lsdyna["t_nid"]["nid"]  += [nid]
     lsdyna["t_nid"]["x"]    += [row.x]
     lsdyna["t_nid"]["y"]    += [row.y]
@@ -415,21 +428,8 @@ for nid, row in abaqus["q_boundary_component"].iterrows():
 
 
 for st in lsdyna.keys():
+    #print(st)
     lsdyna[st] = create_table(lsdyna[st])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -556,16 +556,6 @@ with open(output_path, mode='w') as f:
         f.write("\n")
         
     
-    for pid, row in lsdyna["t_bid_rigid"].iterrows():
-        f.write("*BOUNDARY_PRESCRIBED_MOTION_RIGID_ID\n")
-        f.write('{0: > #10}'.format(pid))
-        f.write("\n")
-        f.write('{0: > #10}'.format(row.pid))
-        f.write('{0: > #10}'.format(row.dof))
-        f.write('{0: > #10}'.format(row.vad))
-        f.write('{0: > #10}'.format(row.lcid))
-        f.write("\n")
-    
     f.write("*ELEMENT_SOLID\n")
     for pid, row in lsdyna["t_eid"].iterrows():
         f.write('{0: > #8}'.format(row.eid))
@@ -593,3 +583,7 @@ with open(output_path, mode='w') as f:
 
 
 print("end")
+
+
+
+
