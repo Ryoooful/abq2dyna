@@ -1,10 +1,12 @@
+# -*- coding: utf-8 -*-. 
 import pandas as pd
 import sys
 
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
+output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
+#Abaqusファイルのテーブル構造
 abaqus = {
     "t_node_id":            {"node_id":[], "x":[], "y":[], "z":[]},
     "t_element_id":         {"element_id":[], "element_type":[], "node_ids":[]},
@@ -21,7 +23,7 @@ abaqus = {
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
     "t_transform_name":     {"transform_name":[], "transform_id":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
     "t_transform_component":{"transform_name":[], "nset_name":[]},
-    "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[]},
+    "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "time":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}, 
     "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[]},
@@ -48,21 +50,21 @@ def get_bool(label, spdata, yesno):
 def create_table(table):
     return pd.DataFrame(data=table, columns=table.keys())
 
-#df.iloc[0][column_name]
-
+#Abaqusファイルのテキストデータをリストに格納する
 with open(input_path) as f:
     lines = [s.strip() for s in f.readlines()]
 
 
-#Read Code .inp
+#Abaqusファイルのテキストデータを１行ずつ読み込む
 for line in lines:
-    ##Skip Comment Text
+    #コメント分はスキップする。
     if "**" == line[:2]:
         continue
     
+    #カンマ区切りでデータを分割する。
     spdata = [s.strip() for s in line.split(",")]
     
-    ##Save Keyword
+    #キーワードを習得し、フラグの作成と各テーブルへの追加を行う。
     if "*" == spdata[0][:1]:
         keyword = spdata[0]
         if "*Solid Section" == keyword:
@@ -128,12 +130,12 @@ for line in lines:
             amplitude_name = get_name("name", spdata)
             abaqus["t_amplitude_name"]["amplitude_id"]                += [len(abaqus["t_amplitude_name"]["amplitude_id"]) + 1]
             abaqus["t_amplitude_name"]["amplitude_name"]              += [amplitude_name]
+            abaqus["t_amplitude_name"]["time"]                        += [get_name("time", spdata)]
         elif "*End Step" == keyword: 
             step_name = ""
-
         continue
 
-    ##Append Data
+    #キーワードの構成情報を各テーブルに追加する。
     if   keyword == "*Node":
         abaqus["t_node_id"]["node_id"]                   += [int(spdata[0])]
         abaqus["t_node_id"]["x"]                         += [float(spdata[1]) * 1000]
@@ -207,14 +209,13 @@ for line in lines:
             abaqus["t_amplitude_component"]["time"]           += [float(spdata[n])]
             abaqus["t_amplitude_component"]["step"]           += [float(spdata[n + 1])]
 
+#Abaqusデータをデータフレーム化する。
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
 
-# print(abaqus["t_boundary_component"])
 # sys.exit()
 #Convert .k 
-
 
 lsdyna = {
     "t_nid":            {"nid":[], "x":[], "y":[], "z":[], "tc":[], "rc":[]},
@@ -329,25 +330,41 @@ for tie, row in abaqus["t_tie_name"].iterrows():
 
 
 
-
+#変位量がある拘束は削除する。
 tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
 tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
 tmp = tmp[~tmp.duplicated()]
 
+#拘束がある場合はチェックつける。
 for index, row in abaqus["t_boundary_id"].iterrows():
     for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
         abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
 del tmp
 
-tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_nset_component"], on='nset_name', how='left')
+
+
+#変位方向を習得する
+tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').dropna(subset=['amount'])
+
+sys.exit()
+
+#初期条件時の拘束を付与する。
+abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
+tmp = abaqus["t_transform_component"][abaqus["t_transform_component"]["type"] == ""]
+tmp = pd.merge(tmp, abaqus["t_boundary_id"], on='nset_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_nset_component"], on='nset_name', how='left')
 tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
-abaqus["t_node_id"] = tmp.groupby("node_id").max()
+abaqus["t_node_id"] = tmp.groupby("node_id").min()
 abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
 del tmp
 
 tmp = abaqus["t_boundary_component"].drop(['freedom'], axis=1).groupby("boundary_id").max().isnull()
 abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], tmp, on='boundary_id', how='left')
 del tmp
+
+
+
+
 
 abaqus["t_constraint_name"] = pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component"], on='nset_name', how='left')
 
@@ -374,7 +391,7 @@ def get_node_on_translation(freedom1, freedom2, freedom3):
         return 0
 
 
-for index, transform in pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left').iterrows():
+for index, transform in abaqus["t_transform_component"].iterrows():
     if transform.type == "C":
         for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == transform.nset_name].iterrows():
             vid = len(lsdyna["t_vid"]["vid"]) + 1
@@ -383,38 +400,39 @@ for index, transform in pd.merge(abaqus["t_transform_name"], abaqus["t_transform
                 lsdyna["t_bid_node"]["dof"]   += [4]
             else:
                 lsdyna["t_bid_node"]["dof"]   += [-4]
-            lsdyna["t_bid_node"]["vad"]       += [2]    ##POINT
+            lsdyna["t_bid_node"]["vad"]       += [2]
             lsdyna["t_bid_node"]["lcid"]      += [2]    ##POINT
             lsdyna["t_bid_node"]["vid"]       += [vid]
             lsdyna["t_vid"]["vid"]            += [vid]
             lsdyna["t_vid"]["xt"]             += [node.x]
             lsdyna["t_vid"]["yt"]             += [node.y]
             lsdyna["t_vid"]["zt"]             += [node.z]
-            lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##POINT
+            lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##円筒座標系のZ方向次第でXYZの掛け率変更
             lsdyna["t_vid"]["yh"]             += [node.y * 1.1]  ##POINT
             lsdyna["t_vid"]["zh"]             += [node.z]        ##POINT
     else:
         if not abaqus["t_boundary_id"][abaqus["t_boundary_id"]["nset_name"] == transform.nset_name].iloc[0]["amount"]:
             tmp = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == transform.nset_name]
             if tmp.groupby("nset_name").count().iloc[0]["node_id"] == 1:
-                nid = tmp.iloc[0]["node_id"]
-                for index, row in abaqus["t_constraint_name"][abaqus["t_constraint_name"]["node_id"] == nid].iterrows():
+                nid = tmp.iloc[0]
+                for index, row in abaqus["t_constraint_name"][abaqus["t_constraint_name"]["node_id"] == nid["node_id"]].iterrows():
                     sid = int(abaqus["t_surface_name"][abaqus["t_surface_name"]["surface_name"] == row.surface_name]["surface_id"])
                     lsdyna["t_sid_component"]["sid"]           += [sid]
                     lsdyna["t_sid_component"]["element_id"]    += [None]
-                    lsdyna["t_sid_component"]["nid"]           += [nid]
+                    lsdyna["t_sid_component"]["nid"]           += [int(nid["node_id"])]
                     create_set_node_from_surface(sid, "node")
-                    lsdyna["t_bid_node"]["nid"]                += [nid]
-                    lsdyna["t_bid_node"]["dof"]                += [1] ##POINT motion xyz
-                    lsdyna["t_bid_node"]["vad"]                += [2]
-                    lsdyna["t_bid_node"]["lcid"]               += [0] ##POINT
-                    lsdyna["t_bid_node"]["vid"]                += [0]
                     lsdyna["t_pid_rigid"]["pid"]               += [row.constraint_id]
                     lsdyna["t_pid_rigid"]["cid"]               += [0]     
                     lsdyna["t_pid_rigid"]["nsid"]              += [sid]               
                     lsdyna["t_pid_rigid"]["cmo"]               += [0]
                     lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
                     lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
+
+                    lsdyna["t_bid_node"]["nid"]                += [int(nid["node_id"])]
+                    lsdyna["t_bid_node"]["dof"]                += [get_node_on_translation(int(nid["u1"]), int(nid["u2"]), int(nid["u3"]))] #x---1,y---2,z---3
+                    lsdyna["t_bid_node"]["vad"]                += [2]
+                    lsdyna["t_bid_node"]["lcid"]               += [0] ##POINT
+                    lsdyna["t_bid_node"]["vid"]                += [0]
             else:
                 print("nset")
 
@@ -428,7 +446,6 @@ for nid, row in abaqus["t_node_id"].iterrows():
 
 
 for st in lsdyna.keys():
-    #print(st)
     lsdyna[st] = create_table(lsdyna[st])
 
 
@@ -554,7 +571,6 @@ with open(output_path, mode='w') as f:
         f.write('{0:0< #10f}'.format(row.yh))
         f.write('{0:0< #10f}'.format(row.zh))
         f.write("\n")
-        
     
     f.write("*ELEMENT_SOLID\n")
     for pid, row in lsdyna["t_eid"].iterrows():
@@ -577,8 +593,8 @@ with open(output_path, mode='w') as f:
         f.write('{0:0< #16f}'.format(float(row.x)))
         f.write('{0:0< #16f}'.format(float(row.y)))
         f.write('{0:0< #16f}'.format(float(row.z)))
-        f.write('{0:0< #16f}'.format(float(row.tc)))
-        f.write('{0:0< #16f}'.format(float(row.rc)))
+        f.write('{0: > #8}'.format(float(row.tc)))
+        f.write('{0: > #8}'.format(float(row.rc)))
         f.write("\n")
 
 
