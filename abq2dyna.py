@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 
 input_path = r"C:\temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dyna.key"
+output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
 keyword = ""
 
 #Abaqusファイルのテーブル構造
@@ -230,10 +230,10 @@ lsdyna = {
     "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "cmo":[], "con1":[], "con2":[]},
     "t_bid_node":       {"nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
     "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
-    "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]}
+    "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]},
+    "t_lcid":           {"lcid":[]},
+    "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]}
         }
-    # "t_lcid":           {"lcid":[]},
-    # "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]},
 
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
@@ -344,9 +344,8 @@ del tmp
 
 
 #変位方向を習得する
-tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').dropna(subset=['amount'])
-
-sys.exit()
+Displacement = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').dropna(subset=['amount'])
+#sys.exit()
 
 #初期条件時の拘束を付与する。
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
@@ -393,6 +392,13 @@ def get_node_on_translation(freedom1, freedom2, freedom3):
 
 for index, transform in abaqus["t_transform_component"].iterrows():
     if transform.type == "C":
+        lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
+        lsdyna["t_lcid"]["lcid"]                   += [lcid]
+        for index, dis in Displacement[Displacement["nset_name"] == transform.nset_name].iterrows():
+            for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == dis.amplitude_name].iterrows():
+                lsdyna["t_lcid_time"]["lcid"]          += [lcid]
+                lsdyna["t_lcid_time"]["a1"]            += [amplitude.time]
+                lsdyna["t_lcid_time"]["o1"]            += [amplitude.step]
         for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == transform.nset_name].iterrows():
             vid = len(lsdyna["t_vid"]["vid"]) + 1
             lsdyna["t_bid_node"]["nid"]       += [node.node_id]
@@ -401,7 +407,7 @@ for index, transform in abaqus["t_transform_component"].iterrows():
             else:
                 lsdyna["t_bid_node"]["dof"]   += [-4]
             lsdyna["t_bid_node"]["vad"]       += [2]
-            lsdyna["t_bid_node"]["lcid"]      += [2]    ##POINT
+            lsdyna["t_bid_node"]["lcid"]      += [lcid]    ##POINT
             lsdyna["t_bid_node"]["vid"]       += [vid]
             lsdyna["t_vid"]["vid"]            += [vid]
             lsdyna["t_vid"]["xt"]             += [node.x]
@@ -427,12 +433,19 @@ for index, transform in abaqus["t_transform_component"].iterrows():
                     lsdyna["t_pid_rigid"]["cmo"]               += [0]
                     lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
                     lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
-
-                    lsdyna["t_bid_node"]["nid"]                += [int(nid["node_id"])]
-                    lsdyna["t_bid_node"]["dof"]                += [get_node_on_translation(int(nid["u1"]), int(nid["u2"]), int(nid["u3"]))] #x---1,y---2,z---3
-                    lsdyna["t_bid_node"]["vad"]                += [2]
-                    lsdyna["t_bid_node"]["lcid"]               += [0] ##POINT
-                    lsdyna["t_bid_node"]["vid"]                += [0]
+                    for index, dis in Displacement[Displacement["nset_name"] == transform.nset_name].iterrows():
+                        lsdyna["t_bid_node"]["nid"]                += [int(nid["node_id"])]
+                        lsdyna["t_bid_node"]["dof"]                += [int(dis.freedom)]
+                        lsdyna["t_bid_node"]["vad"]                += [2]
+                        lsdyna["t_bid_node"]["vid"]                += [0]
+                        lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
+                        lsdyna["t_lcid"]["lcid"]                   += [lcid]
+                        lsdyna["t_bid_node"]["lcid"]               += [lcid] 
+                        for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == dis.amplitude_name].iterrows():
+                            lsdyna["t_lcid_time"]["lcid"]          += [lcid]
+                            lsdyna["t_lcid_time"]["a1"]            += [amplitude.time]
+                            lsdyna["t_lcid_time"]["o1"]            += [amplitude.step]
+                        #t_amplitude_component
             else:
                 print("nset")
 
@@ -448,7 +461,8 @@ for nid, row in abaqus["t_node_id"].iterrows():
 for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
 
-
+print(lsdyna["t_lcid"])
+print(lsdyna["t_lcid_time"])
 
 #write dyna file
 
