@@ -2,7 +2,7 @@
 import pandas as pd
 import sys
 
-input_path = r"C:\temp\abq2dyna.inp"
+input_path = r"C:\Temp\20200819abq2dyna.inp"
 output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
@@ -33,17 +33,21 @@ abaqus = {
 lsdyna = {
     "t_nid":            {"nid":[], "x":[], "y":[], "z":[], "tc":[], "rc":[]},
     "t_eid":            {"eid":[], "pid":[], "n1":[], "n2":[], "n3":[], "n4":[], "n5":[], "n6":[], "n7":[], "n8":[]},
-    "t_secid_solid":    {"secid":[], "title":[], "elform":[]},
-    "t_part_id":        {"pid":[], "heading":[], "secid":[], "mid":[]},
-    "t_mid_ogden":      {"mid":[], "title":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
-    "t_mid_elastics":   {"mid":[], "title":[], "ro":[], "e":[], "pr":[]},
-    "t_cid_exterior":   {"cid":[], "heading":[], "ssid":[], "sstyp":[]},
+    "t_secid":          {"secid":[], "title":[], "elform":[]},
+    "t_pid":            {"pid":[], "title":[], "type":[]},
+    "t_pid_part":       {"pid":[], "secid":[], "mid":[]},
+    "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "pnode":[]},
+    "t_mid":            {"mid":[], "title":[], "type":[]},
+    "t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
+    "t_mid_elastic":   {"mid":[], "ro":[], "e":[], "pr":[]},
+    "t_cid":            {"cid":[], "title":[], "type":[]},
+    "t_cid_exterior":   {"cid":[], "ssid":[], "sstyp":[]},
+    "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
     "t_sid":            {"sid":[], "title":[], "type":[]},
     "t_sid_component":  {"sid":[], "element_id":[], "nid":[]},
-    "t_pid_rigid":      {"pid":[], "title":[], "cid":[], "nsid":[], "cmo":[], "con1":[], "con2":[]},
-    "t_bid_node":       {"id":[], "heading":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
-    "t_bid_set_node":   {"id":[], "heading":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
-    "t_cid_surface":    {"cid":[], "heading":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
+    "t_id":             {"id":[], "title":[], "type":[]},
+    "t_id_node":        {"id":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
+    "t_id_set_node":    {"id":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
     "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]},
     "t_lcid":           {"lcid":[], "title":[]},
     "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]}
@@ -221,7 +225,7 @@ for line in lines:
             abaqus["t_boundary_component"]["amount"]    += [float(spdata[3])]
             #abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 9]][-1] = float(spdata[3])
         else:
-            abaqus["t_boundary_component"]["amount"]    += [None]
+            abaqus["t_boundary_component"]["amount"]    += [0]
     elif keyword == "*Amplitude": 
         for n in range(0, len(spdata), 2):
             abaqus["t_amplitude_component"]["amplitude_name"] += [amplitude_name]
@@ -232,7 +236,7 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
-
+print("loded inputfile")
 # sys.exit()
 #Convert .k 
 
@@ -241,40 +245,57 @@ abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_ele
 
 tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index()
 tmp.index = tmp.index + 1
-for secid, row in tmp.iterrows():
+for index, row in tmp.iterrows():
     mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == row.material_name].iloc[0]
-    lsdyna["t_secid_solid"]["secid"]    += [row.solid_id]
-    lsdyna["t_secid_solid"]["title"]    += [row.elset_name]
+    secid = len(lsdyna["t_secid"]["secid"]) + 1
+    pid   = len(lsdyna["t_pid"]["pid"]) + 1
+    mid   = len(lsdyna["t_mid"]["mid"]) + 1
+    cid   = len(lsdyna["t_cid"]["cid"]) + 1
+
+    #セクションを設定する
+    lsdyna["t_secid"]["secid"]    += [secid]
+    lsdyna["t_secid"]["title"]    += [row.elset_name]
     if row.element_type == "C3D4":
         if len(mat["hyperelastic"]) == 0:
-            lsdyna["t_secid_solid"]["elform"]   += [10]
+            lsdyna["t_secid"]["elform"]   += [10]
         else:
-            lsdyna["t_secid_solid"]["elform"]   += [13]
+            lsdyna["t_secid"]["elform"]   += [13]
+    
+    #パートを設定する
+    lsdyna["t_pid"]["pid"]              += [pid]
+    lsdyna["t_pid"]["title"]            += [row.elset_name]
+    lsdyna["t_pid"]["type"]             += ["part"]
+    lsdyna["t_pid_part"]["pid"]         += [pid]
+    lsdyna["t_pid_part"]["secid"]       += [secid]
+    lsdyna["t_pid_part"]["mid"]         += [mid]
 
-    lsdyna["t_part_id"]["pid"]          += [row.solid_id]
-    lsdyna["t_part_id"]["heading"]      += [row.elset_name]
-    lsdyna["t_part_id"]["secid"]        += [row.solid_id]
-    lsdyna["t_part_id"]["mid"]          += [mat["material_id"]]
-    lsdyna["t_cid_exterior"]["cid"]     += [row.solid_id]
-    lsdyna["t_cid_exterior"]["heading"] += [row.elset_name]
-    lsdyna["t_cid_exterior"]["ssid"]    += [row.solid_id]
+    #自己接触を設定する
+    lsdyna["t_cid"]["cid"]              += [cid]
+    lsdyna["t_cid"]["title"]            += [row.elset_name]
+    lsdyna["t_cid"]["type"]             += ["exterior"]
+    lsdyna["t_cid_exterior"]["cid"]     += [cid]
+    lsdyna["t_cid_exterior"]["ssid"]    += [secid]
     lsdyna["t_cid_exterior"]["sstyp"]   += [3]
+
+    #材料データを設定する
+    lsdyna["t_mid"]["mid"]              += [mid]
+    lsdyna["t_mid"]["title"]            += [mat["material_name"]]
     if len(mat["hyperelastic"]) > 1:
-        lsdyna["t_mid_ogden"]["mid"]    += [mat["material_id"]]
-        lsdyna["t_mid_ogden"]["title"]  += [mat["material_name"]]
+        lsdyna["t_mid"]["type"]         += ["ogden"]
+        lsdyna["t_mid_ogden"]["mid"]    += [mid]
         lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_ogden"]["pr"]     += [0.499]
-        for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][4:]):
+        for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
             lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
     else:
-        lsdyna["t_mid_elastics"]["mid"]    += [mat["material_id"]]
-        lsdyna["t_mid_elastics"]["title"]  += [mat["material_name"]]
-        lsdyna["t_mid_elastics"]["ro"]     += [float(mat["density"])]
-        lsdyna["t_mid_elastics"]["e"]      += [float(mat["young"])]
-        lsdyna["t_mid_elastics"]["pr"]     += [float(mat["poason"])]
+        lsdyna["t_mid"]["type"]            += ["elastic"]
+        lsdyna["t_mid_elastic"]["mid"]    += [mid]
+        lsdyna["t_mid_elastic"]["ro"]     += [float(mat["density"])]
+        lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"])]
+        lsdyna["t_mid_elastic"]["pr"]     += [float(mat["poason"])]
 del tmp
 
-
+#要素を設定する
 for eid, row in abaqus["q_part_component"].iterrows():
     lsdyna["t_eid"]["eid"]     += [row.element_id]
     lsdyna["t_eid"]["pid"]     += [row.solid_id]
@@ -289,8 +310,10 @@ tmp = pd.merge(tmp, abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_segment_component"] = pd.merge(tmp, abaqus["t_element_id"], on='element_id', how='left')
 del tmp
 
+#elsetからサーフェスに変換する
 def create_set_node_from_surface(sid, set_type, heading):
     for index, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == heading].iterrows():
+        #要素タイプから指定面の節点IDを抽出する。
         if row.element_type == "C3D4":
             if row.identification == "S1":
                 plane = [row.node_ids[2], row.node_ids[1], row.node_ids[0]]
@@ -314,25 +337,30 @@ def create_set_node_from_surface(sid, set_type, heading):
                 lsdyna["t_sid_component"]["sid"]           += [sid]
                 lsdyna["t_sid_component"]["element_id"]    += [row.element_id]
                 lsdyna["t_sid_component"]["nid"]           += [plane[len(plane) - 1]]
-        
+
+#接触面の設定を行う
 for tie, row in abaqus["t_tie_name"].iterrows():
-    lsdyna["t_cid_surface"]["cid"]          += [len(lsdyna["t_cid_surface"]["cid"]) + 1]    
-    lsdyna["t_cid_surface"]["heading"]      += [row.tie_name]
-    sid = len(lsdyna["t_sid"]["sid"]) + 1
-    lsdyna["t_cid_surface"]["ssid"]         += [sid]
+    sid_slave  = len(lsdyna["t_sid"]["sid"]) + 1
+    lsdyna["t_sid"]["sid"]                  += [sid_slave]
+    lsdyna["t_sid"]["type"]                 += ["segment"]
+    lsdyna["t_sid"]["title"]                += [row.slave_surface]
+    sid_master = len(lsdyna["t_sid"]["sid"]) + 1
+    lsdyna["t_sid"]["sid"]                  += [sid_master]
+    lsdyna["t_sid"]["type"]                 += ["segment"]
+    lsdyna["t_sid"]["title"]                += [row.master_surface]
+
+    cid = len(lsdyna["t_cid"]["cid"]) + 1
+    lsdyna["t_cid"]["cid"]                  += [cid]
+    lsdyna["t_cid"]["title"]                += [row.tie_name]
+    lsdyna["t_cid"]["type"]                 += ["surface"]
+
+    lsdyna["t_cid_surface"]["cid"]          += [cid]
+    lsdyna["t_cid_surface"]["ssid"]         += [sid_slave]
     lsdyna["t_cid_surface"]["sstyp"]        += [0]
-    lsdyna["t_sid"]["sid"]       += [sid]
-    lsdyna["t_sid"]["type"]      += ["segment"]
-    lsdyna["t_sid"]["title"]   += [row.slave_surface]
-    create_set_node_from_surface(sid, "segment", row.slave_surface)
-    
-    sid = len(lsdyna["t_sid"]["sid"]) + 1
-    lsdyna["t_cid_surface"]["msid"]         += [sid]
+    create_set_node_from_surface(sid_slave, "segment", row.slave_surface)
+    lsdyna["t_cid_surface"]["msid"]         += [sid_master]
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
-    lsdyna["t_sid"]["sid"]       += [sid]
-    lsdyna["t_sid"]["type"]      += ["segment"]
-    lsdyna["t_sid"]["title"]   += [row.master_surface]
-    create_set_node_from_surface(sid, "segment", row.master_surface)
+    create_set_node_from_surface(sid_master, "segment", row.master_surface)
 
 #変位量がある拘束は削除する。
 tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
@@ -344,8 +372,6 @@ for index, row in abaqus["t_boundary_id"].iterrows():
     for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
         abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
 del tmp
-
-#sys.exit()
 
 #初期条件時の拘束をt_node_idに付与する。
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
@@ -394,20 +420,25 @@ for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component
     sid = len(lsdyna["t_sid"]["sid"]) + 1
     lsdyna["t_sid"]["sid"]                     += [sid]
     lsdyna["t_sid"]["type"]                    += ["node"]
-    lsdyna["t_sid"]["title"]                 += [row.constraint_name]
-    lsdyna["t_sid_component"]["sid"]           += [sid]
-    lsdyna["t_sid_component"]["element_id"]    += [None]
-    lsdyna["t_sid_component"]["nid"]           += [row.node_id]
+    lsdyna["t_sid"]["title"]                   += [row.surface_name]
+    # lsdyna["t_sid_component"]["sid"]           += [sid] #POINT
+    # lsdyna["t_sid_component"]["element_id"]    += [None]
+    # lsdyna["t_sid_component"]["nid"]           += [row.node_id]
     create_set_node_from_surface(sid, "node", row.surface_name)
-    lsdyna["t_pid_rigid"]["pid"]               += [row.constraint_id]
-    lsdyna["t_pid_rigid"]["title"]             += [row.constraint_name]
-    lsdyna["t_pid_rigid"]["cid"]               += [0]     
-    lsdyna["t_pid_rigid"]["nsid"]              += [sid]               
-    lsdyna["t_pid_rigid"]["cmo"]               += [0]
+    
+    pid = len(lsdyna["t_pid"]["pid"]) + 1
+    lsdyna["t_pid"]["pid"]                     += [pid]
+    lsdyna["t_pid"]["title"]                   += [row.constraint_name]
+    lsdyna["t_pid"]["type"]                    += ["rigid"]
+    lsdyna["t_pid_rigid"]["pid"]               += [pid]
+    lsdyna["t_pid_rigid"]["cid"]               += [0]
+    lsdyna["t_pid_rigid"]["nsid"]              += [sid]
+    lsdyna["t_pid_rigid"]["pnode"]             += [row.node_id]
+    # lsdyna["t_pid_rigid"]["cmo"]               += [0]
     # lsdyna["t_pid_rigid"]["con1"]              += [0]
     # lsdyna["t_pid_rigid"]["con2"]              += [0]
-    lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
-    lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
+    # lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
+    # lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
 
 
 
@@ -420,7 +451,8 @@ lsdyna["t_lcid_time"]["lcid"] += [1]
 lsdyna["t_lcid_time"]["a1"]   += [abaqus["t_amplitude_component"].max()["time"]]
 lsdyna["t_lcid_time"]["o1"]   += [0]
 
-for index, boundary in abaqus["t_boundary_id"].iterrows():
+
+for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').iterrows():
     if boundary.amplitude_name == "":
         lcid = 1
     else:
@@ -430,21 +462,15 @@ for index, boundary in abaqus["t_boundary_id"].iterrows():
         for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name].iterrows():
             lsdyna["t_lcid_time"]["lcid"] += [lcid]
             lsdyna["t_lcid_time"]["a1"]   += [amplitude.time]
-            lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
+            if boundary.amount == 0:
+                lsdyna["t_lcid_time"]["o1"]   += [0]
+            else:
+                lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
+            
     
     if boundary.type == "C":
         for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name].iterrows():
             vid = len(lsdyna["t_vid"]["vid"]) + 1
-            lsdyna["t_bid_node"]["id"]        += [len(lsdyna["t_bid_node"]["id"]) + 1]
-            lsdyna["t_bid_node"]["heading"]   += [boundary.nset_name]
-            lsdyna["t_bid_node"]["nid"]       += [node.node_id]
-            if node.ur3 == 1:
-                lsdyna["t_bid_node"]["dof"]   += [4]
-            else:
-                lsdyna["t_bid_node"]["dof"]   += [-4]
-            lsdyna["t_bid_node"]["vad"]       += [2]
-            lsdyna["t_bid_node"]["lcid"]      += [lcid]    
-            lsdyna["t_bid_node"]["vid"]       += [vid]
             lsdyna["t_vid"]["vid"]            += [vid]
             lsdyna["t_vid"]["xt"]             += [node.x]
             lsdyna["t_vid"]["yt"]             += [node.y]
@@ -452,99 +478,178 @@ for index, boundary in abaqus["t_boundary_id"].iterrows():
             lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##円筒座標系のZ方向次第でXYZの掛け率変更
             lsdyna["t_vid"]["yh"]             += [node.y * 1.1]  ##POINT
             lsdyna["t_vid"]["zh"]             += [node.z]        ##POINT
+
+            id = len(lsdyna["t_id"]["id"]) + 1
+            lsdyna["t_id"]["id"]             += [id]
+            lsdyna["t_id"]["title"]          += [boundary.nset_name]
+            lsdyna["t_id"]["type"]           += ["node"]
+
+            lsdyna["t_id_node"]["id"]        += [id]
+            lsdyna["t_id_node"]["nid"]       += [node.node_id]
+            if node.ur3 == 1:
+                lsdyna["t_id_node"]["dof"]   += [4]
+            else:
+                lsdyna["t_id_node"]["dof"]   += [-4]
+            lsdyna["t_id_node"]["vad"]       += [2]
+            lsdyna["t_id_node"]["lcid"]      += [lcid]    
+            lsdyna["t_id_node"]["vid"]       += [vid]
     else:
         sid = len(lsdyna["t_sid"]["sid"]) + 1
         lsdyna["t_sid"]["sid"]       += [sid]
-        lsdyna["t_sid"]["type"]      += ["node"]
         lsdyna["t_sid"]["title"]     += [boundary.nset_name]
+        lsdyna["t_sid"]["type"]      += ["node"]
         for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name].iterrows():
             lsdyna["t_sid_component"]["sid"]           += [sid]
             lsdyna["t_sid_component"]["element_id"]    += [None]
             lsdyna["t_sid_component"]["nid"]           += [node.node_id]
-        lsdyna["t_bid_set_node"]["id"]                 += [len(lsdyna["t_bid_set_node"]["id"]) + 1]
-        lsdyna["t_bid_set_node"]["heading"]            += [boundary.nset_name]
-        lsdyna["t_bid_set_node"]["sid"]                += [sid]
-        lsdyna["t_bid_set_node"]["dof"]                += [0] #POINT
-        lsdyna["t_bid_set_node"]["vad"]                += [2]
-        lsdyna["t_bid_set_node"]["vid"]                += [0]
-        lsdyna["t_bid_set_node"]["lcid"]               += [lcid] 
-
+        id = len(lsdyna["t_id"]["id"]) + 1
+        lsdyna["t_id"]["id"]                           += [id]
+        lsdyna["t_id"]["title"]                        += [boundary.nset_name]
+        lsdyna["t_id"]["type"]                         += ["set_node"]
+        lsdyna["t_id_set_node"]["id"]                  += [id]
+        lsdyna["t_id_set_node"]["sid"]                 += [sid]
+        if 1 <= float(boundary.freedom) and float(boundary.freedom) <= 3:
+            lsdyna["t_id_set_node"]["dof"]                 += [float(boundary.freedom)]
+        elif 4 <= float(boundary.freedom) and float(boundary.freedom) <= 6:
+            lsdyna["t_id_set_node"]["dof"]                 += [float(boundary.freedom) + 1]
+        lsdyna["t_id_set_node"]["vad"]                 += [2]
+        lsdyna["t_id_set_node"]["vid"]                 += [0]
+        lsdyna["t_id_set_node"]["lcid"]                += [lcid] 
 
 for nid, row in abaqus["t_node_id"].iterrows():
     lsdyna["t_nid"]["nid"]  += [nid]
     lsdyna["t_nid"]["x"]    += [row.x]
     lsdyna["t_nid"]["y"]    += [row.y]
     lsdyna["t_nid"]["z"]    += [row.z]
-    lsdyna["t_nid"]["tc"]   += [get_node_on_translation(row.u1, row.u2, row.u3)]
-    lsdyna["t_nid"]["rc"]   += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
+    lsdyna["t_nid"]["tc"]   += [0]
+    lsdyna["t_nid"]["rc"]   += [0]
+    # lsdyna["t_nid"]["tc"]   += [get_node_on_translation(row.u1, row.u2, row.u3)]
+    # lsdyna["t_nid"]["rc"]   += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
 
 
 for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
 
 
+print("create lsdyna")
 #write dyna file
 
 with open(output_path, mode='w') as f:
     f.write("*SECTION_SOLID_TITLE\n")
-    for pid, row in lsdyna["t_secid_solid"].iterrows():
+    for pid, row in lsdyna["t_secid"].iterrows():
         f.write(row.title)
         f.write("\n")
         f.write('{0: > #10}'.format(row.secid))
         f.write('{0: > #10}'.format(row.elform))
         f.write("\n")
 
-    f.write("*PART\n")
-    for pid, row in lsdyna["t_part_id"].iterrows():
-        f.write(row.heading + "\n")
-        f.write('{0: > #10}'.format(row.pid))
-        f.write('{0: > #10}'.format(row.secid))
-        f.write('{0: > #10}'.format(row.mid))
-        f.write("\n")
     
+    for pid, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_part"], on='pid', how='left').iterrows():
+        if row.type == "part":
+            f.write("*PART\n")
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(int(row.pid)))
+            f.write('{0: > #10}'.format(int(row.secid)))
+            f.write('{0: > #10}'.format(int(row.mid)))
+            f.write("\n")
+
+    for pid, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_rigid"], on='pid', how='left').iterrows():
+        if row.type == "rigid":
+            f.write("*CONSTRAINED_NODAL_RIGID_BODY_TITLE\n")
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(row.pid))
+            f.write("          ")           #cid
+            f.write('{0: > #10}'.format(row.nsid))
+            f.write('{0: > #10}'.format(row.pnode))    #pnode
+            f.write("\n")
+            #f.write('{0: > #10}'.format(1)) #com
+            #f.write('{0: > #10}'.format(5)) #con1
+            #f.write('{0: > #10}'.format(7)) #con2
+            #f.write("\n")
     
-    for pid, row in lsdyna["t_cid_exterior"].iterrows():
-        f.write("*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID\n")
-        f.write('{0: > #10}'.format(row.cid))
-        f.write(row.heading)
-        f.write("\n")
-        f.write('{0: > #10}'.format(row.ssid))
-        f.write("          ")
-        f.write('{0: > #10}'.format(row.sstyp))
-        f.write("          ")
-        f.write("\n")
-        f.write('{0: > #10}'.format(0.1))
-        f.write('{0: > #10}'.format(0.1))
-        f.write("          ")
-        f.write("          ")
-        f.write('{0: > #10}'.format(20))
-        f.write("\n")
-        f.write('{0: > #10}'.format(2))
-        f.write('{0: > #10}'.format(2))
-        f.write("\n")
-        f.write('{0: > #10}'.format(2))
-        f.write("          ")
-        f.write("          ")
-        f.write("          ")
-        f.write('{0: > #10}'.format(3))
-        f.write('{0: > #10}'.format(5))
-        f.write("\n")
-        
-    for pid, row in lsdyna["t_mid_elastics"].iterrows():
-        f.write("*MAT_ELASTIC_TITLE\n")
-        f.write(row.title + "\n")
-        f.write('{0: > #10}'.format(row.mid))
-        f.write('{0: > #10}'.format(row.ro))       
-        f.write('{0: > #10}'.format(row.e))         
-        f.write('{0: > #10}'.format(row.pr))        
-        f.write("\n")
-    #"t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
+    for mid, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
+        if row.type == "elastic":
+            f.write("*MAT_ELASTIC_TITLE\n")
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(row.mid))
+            f.write('{0: > #10}'.format(row.ro))       
+            f.write('{0: > #10}'.format(row.e))         
+            f.write('{0: > #10}'.format(row.pr))        
+            f.write("\n")
+    
+    for mid, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left').iterrows():
+        if row.type == "ogden":
+            f.write("*MAT_OGDEN_RUBBER_TITLE\n")
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(row.mid))
+            f.write('{0: > #10}'.format(row.ro))             
+            f.write('{0: > #10}'.format(row.pr))       
+            f.write('{0: > #10}'.format(0))      #n
+            f.write('{0: > #10}'.format(3))      #nv
+            f.write('{0: > #10f}'.format(1))     #g
+            f.write('{0: > #10f}'.format(0.001)) #nv
+            f.write('{0: > #10f}'.format(0))     #ref
+            f.write("\n")
+            f.write('{0: > #10f}'.format(row.mu1))
+            f.write('{0: > #10f}'.format(row.mu2))             
+            f.write('{0: > #10f}'.format(row.mu3))     
+            f.write('{0: > #10f}'.format(0))     #mu4
+            f.write('{0: > #10f}'.format(0))     #mu5             
+            f.write('{0: > #10f}'.format(0))     #mu6   
+            f.write("\n")
+            f.write('{0: > #10f}'.format(row.alpha1))
+            f.write('{0: > #10f}'.format(row.alpha2))             
+            f.write('{0: > #10f}'.format(row.alpha3))     
+            f.write('{0: > #10f}'.format(0))     #alpha4
+            f.write('{0: > #10f}'.format(0))     #alpha5             
+            f.write('{0: > #10f}'.format(0))     #alpha6   
+            f.write("\n")
+
+    for cid, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
+        if row.type == "exterior":
+            f.write("*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID\n")
+            f.write('{0: > #10}'.format(row.cid))
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(row.ssid))
+            f.write('{0: > #10}'.format(0))         #msid
+            f.write('{0: > #10}'.format(row.sstyp)) 
+            f.write('{0: > #10}'.format(0))         #mstyp
+            f.write("\n")
+            f.write('{0: > #10}'.format(0.1))       #fs
+            f.write('{0: > #10}'.format(0.1))       #fd
+            f.write("          ")                   #dc
+            f.write("          ")                   #vc
+            f.write('{0: > #10}'.format(20))        #vdc
+            f.write("\n")
+            f.write('{0: > #10}'.format(2))         #sfs
+            f.write('{0: > #10}'.format(2))         #sfm
+            f.write("\n")
+            f.write('{0: > #10}'.format(2))         #soft
+            f.write("          ")                   #sofscl
+            f.write("          ")                   #lcidab
+            f.write("          ")                   #maxpar
+            f.write('{0: > #10}'.format(3))         #sbopt
+            f.write('{0: > #10}'.format(5))         #depth
+            f.write("\n")
+    
+    for cid, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_surface"], on='cid', how='left').iterrows():
+        if row.type == "surface":
+            f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
+            f.write('{0: > #10}'.format(row.cid))
+            f.write(row.title + "\n")
+            f.write('{0: > #10}'.format(row.ssid))
+            f.write('{0: > #10}'.format(row.msid))
+            f.write('{0: > #10}'.format(row.sstyp))
+            f.write('{0: > #10}'.format(row.mstyp))
+            f.write("\n")
+            f.write('{0: > #50}'.format(20))        #vdc
+            f.write("\n")
+            f.write("\n")
 
     for sid, row in lsdyna["t_sid"].iterrows():
         if row.type == "segment":
             f.write("*SET_SEGMENT_TITLE\n")
-            f.write(row.title)
-            f.write("\n")
+            f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.sid))
             element_id = 0
             for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].iterrows():
@@ -553,11 +658,9 @@ with open(output_path, mode='w') as f:
                     f.write("\n")
                 f.write('{0: > #10}'.format(row.nid))
             f.write("\n")
-            
         elif row.type == "node":
             f.write("*SET_NODE_TITLE\n")
-            f.write(row.title)
-            f.write("\n")
+            f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.sid))
             for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].reset_index().iterrows():
                 if index % 8 == 0: 
@@ -567,8 +670,7 @@ with open(output_path, mode='w') as f:
 
     for index, lcid in lsdyna["t_lcid"].iterrows():
         f.write("*DEFINE_CURVE_TITLE\n")
-        f.write(lcid.title)
-        f.write("\n")
+        f.write(lcid.title + "\n")
         f.write('{0: > #10}'.format(lcid.lcid))
         f.write("\n")
         for index, row in lsdyna["t_lcid_time"][lsdyna["t_lcid_time"]['lcid'] == lcid.lcid].iterrows():
@@ -576,39 +678,22 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #20}'.format(row.o1))
             f.write("\n")
         
-
-    for cid, row in lsdyna["t_cid_surface"].iterrows():
-        f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
-        f.write('{0: > #10}'.format(row.cid))
-        f.write(row.heading)
-        f.write("\n")
-        f.write('{0: > #10}'.format(row.ssid))
-        f.write('{0: > #10}'.format(row.msid))
-        f.write('{0: > #10}'.format(row.sstyp))
-        f.write('{0: > #10}'.format(row.mstyp))
-        f.write("\n")
-        f.write('{0: > #50}'.format(20))
-        f.write("\n")
-        f.write("\n")
-    
-    for cid, row in lsdyna["t_pid_rigid"].iterrows():
-        f.write("*CONSTRAINED_NODAL_RIGID_BODY_SPC_TITLE\n")
-        f.write(row.title)
-        f.write("\n")
-        f.write('{0: > #10}'.format(row.pid))
+    for cid, row in pd.merge(lsdyna["t_id_set_node"], lsdyna["t_id"], on='id', how='left').iterrows():
+        f.write("*BOUNDARY_PRESCRIBED_MOTION_SET_ID\n")
+        f.write('{0: > #10}'.format(row.id))
+        f.write(row.title + "\n")
+        f.write('{0: > #10}'.format(row.sid))
+        f.write('{0: > #10}'.format(row.dof))
+        f.write('{0: > #10}'.format(row.vad))
+        f.write('{0: > #10}'.format(row.lcid))
         f.write("          ")
-        f.write('{0: > #10}'.format(row.nsid))
+        f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
-        f.write('{0: > #10}'.format(1))
-        f.write('{0: > #10}'.format(5))
-        f.write('{0: > #10}'.format(7))
-        f.write("\n")
-    
-    for nid, row in lsdyna["t_bid_node"].iterrows():
+
+    for cid, row in pd.merge(lsdyna["t_id_node"], lsdyna["t_id"], on='id', how='left').iterrows():
         f.write("*BOUNDARY_PRESCRIBED_MOTION_NODE_ID\n")
         f.write('{0: > #10}'.format(row.id))
-        f.write(row.heading)
-        f.write("\n")
+        f.write(row.title + "\n")
         f.write('{0: > #10}'.format(row.nid))
         f.write('{0: > #10}'.format(row.dof))
         f.write('{0: > #10}'.format(row.vad))
@@ -617,17 +702,15 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
 
-    for nid, row in lsdyna["t_bid_set_node"].iterrows():
-        f.write("*BOUNDARY_PRESCRIBED_MOTION_SET_ID\n")
-        f.write('{0: > #10}'.format(row.id))
-        f.write(row.heading)
-        f.write("\n")
-        f.write('{0: > #10}'.format(row.sid))
-        f.write('{0: > #10}'.format(row.dof))
-        f.write('{0: > #10}'.format(row.vad))
-        f.write('{0: > #10}'.format(row.lcid))
-        f.write("          ")
-        f.write('{0: > #10}'.format(row.vid))
+    for nid, row in lsdyna["t_vid"].iterrows():
+        f.write("*DEFINE_VECTOR\n") 
+        f.write('{0: > #10}'.format(int(row.vid)))
+        f.write('{0:0< #10f}'.format(row.xt))
+        f.write('{0:0< #10f}'.format(row.yt))
+        f.write('{0:0< #10f}'.format(row.zt))
+        f.write('{0:0< #10f}'.format(row.xh))
+        f.write('{0:0< #10f}'.format(row.yh))
+        f.write('{0:0< #10f}'.format(row.zh))
         f.write("\n")
 
     f.write("*ELEMENT_SOLID\n")
@@ -651,20 +734,13 @@ with open(output_path, mode='w') as f:
         f.write('{0:0< #16f}'.format(float(row.x)))
         f.write('{0:0< #16f}'.format(float(row.y)))
         f.write('{0:0< #16f}'.format(float(row.z)))
+        f.write('{0: > #8}'.format(0))
+        f.write('{0: > #8}'.format(0))
         f.write('{0: > #8}'.format(float(row.tc)))
         f.write('{0: > #8}'.format(float(row.rc)))
         f.write("\n")
 
-    for nid, row in lsdyna["t_vid"].iterrows():
-        f.write("*DEFINE_VECTOR\n") 
-        f.write('{0: > #10}'.format(int(row.vid)))
-        f.write('{0:0< #10f}'.format(row.xt))
-        f.write('{0:0< #10f}'.format(row.yt))
-        f.write('{0:0< #10f}'.format(row.zt))
-        f.write('{0:0< #10f}'.format(row.xh))
-        f.write('{0:0< #10f}'.format(row.yh))
-        f.write('{0:0< #10f}'.format(row.zh))
-        f.write("\n")
+    
 
 print("end")
 
