@@ -2,7 +2,7 @@
 import pandas as pd
 import sys
 
-input_path = r"C:\Temp\20200819abq2dyna.inp"
+input_path = r"C:\Temp\abq2dyna.inp"
 output_path = r"C:\Users\1080045106\Desktop\dyna.key"
 keyword = ""
 
@@ -26,7 +26,7 @@ abaqus = {
     "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "time":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
     "t_step_name":          {"step_name":[], "step_id":[]}, 
-    "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[], "u1":[], "u2":[], "u3":[], "ur1":[], "ur2":[], "ur3":[]},
+    "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[]},
     "t_boundary_component": {"boundary_id":[], "freedom":[], "amount":[]}
         }
 
@@ -39,7 +39,7 @@ lsdyna = {
     "t_pid_rigid":      {"pid":[], "cid":[], "nsid":[], "pnode":[]},
     "t_mid":            {"mid":[], "title":[], "type":[]},
     "t_mid_ogden":      {"mid":[], "ro":[], "pr":[], "mu1":[], "alpha1":[], "mu2":[], "alpha2":[], "mu3":[], "alpha3":[]},
-    "t_mid_elastic":   {"mid":[], "ro":[], "e":[], "pr":[]},
+    "t_mid_elastic":    {"mid":[], "ro":[], "e":[], "pr":[]},
     "t_cid":            {"cid":[], "title":[], "type":[]},
     "t_cid_exterior":   {"cid":[], "ssid":[], "sstyp":[]},
     "t_cid_surface":    {"cid":[], "ssid":[], "msid":[], "sstyp":[], "mstyp":[]},
@@ -236,7 +236,7 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
-print("loded inputfile")
+print("inputfile loaded")
 # sys.exit()
 #Convert .k 
 
@@ -362,24 +362,27 @@ for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
     create_set_node_from_surface(sid_master, "segment", row.master_surface)
 
-#変位量がある拘束は削除する。
-tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
-tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
-tmp = tmp[~tmp.duplicated()]
+# #変位量がある拘束は削除する。
+# tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
+# tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
+# tmp = tmp[~tmp.duplicated()]
 
-#拘束がある場合はチェックつける。
-for index, row in abaqus["t_boundary_id"].iterrows():
-    for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
-        abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
-del tmp
+# #拘束がある場合はチェックつける。
+# for index, row in abaqus["t_boundary_id"].iterrows():
+#     for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
+#         abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
+# del tmp
 
 #初期条件時の拘束をt_node_idに付与する。
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
+
 tmp = abaqus["t_transform_component"][abaqus["t_transform_component"]["type"] == ""]
 tmp = pd.merge(abaqus["t_transform_component"], abaqus["t_boundary_id"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_nset_component"], on='nset_name', how='left')
-tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z", "u1", "u2", "u3", "ur1", "ur2", "ur3"]]
-abaqus["t_node_id"] = tmp.groupby("node_id").min()
+tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z"]]
+
+#abaqus["t_node_id"] = tmp.groupby("node_id").min()
+
 abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
 del tmp
 
@@ -452,72 +455,111 @@ lsdyna["t_lcid_time"]["a1"]   += [abaqus["t_amplitude_component"].max()["time"]]
 lsdyna["t_lcid_time"]["o1"]   += [0]
 
 
+#print(pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left'))
+
 for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').iterrows():
-    if boundary.amplitude_name == "":
-        lcid = 1
-    else:
-        lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
-        lsdyna["t_lcid"]["lcid"]          += [lcid]
-        lsdyna["t_lcid"]["title"]         += [boundary.amplitude_name]
-        for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name].iterrows():
-            lsdyna["t_lcid_time"]["lcid"] += [lcid]
-            lsdyna["t_lcid_time"]["a1"]   += [amplitude.time]
-            if boundary.amount == 0:
-                lsdyna["t_lcid_time"]["o1"]   += [0]
-            else:
-                lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
+    lcid = 1
+    if boundary.amplitude_name != "":
+        lcid_name = str(boundary.amplitude_name) + "," + str(boundary.amount)
+        if lcid_name in lsdyna["t_lcid"]["title"]:
+            lcid = lsdyna["t_lcid"]["lcid"][lsdyna["t_lcid"]["title"].index(lcid_name)]
+        else:
+            lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
+            lsdyna["t_lcid"]["lcid"]          += [lcid]
+            lsdyna["t_lcid"]["title"]         += [lcid_name]
+            for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name].iterrows():
+                lsdyna["t_lcid_time"]["lcid"] += [lcid]
+                lsdyna["t_lcid_time"]["a1"]   += [amplitude.time]
+                if boundary.amount == 0:
+                    lsdyna["t_lcid_time"]["o1"]   += [0]
+                else:
+                    lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
             
-    
+    nset = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name]
+    #円筒座標系の場合
     if boundary.type == "C":
-        for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name].iterrows():
-            vid = len(lsdyna["t_vid"]["vid"]) + 1
-            lsdyna["t_vid"]["vid"]            += [vid]
-            lsdyna["t_vid"]["xt"]             += [node.x]
-            lsdyna["t_vid"]["yt"]             += [node.y]
-            lsdyna["t_vid"]["zt"]             += [node.z]
-            lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##円筒座標系のZ方向次第でXYZの掛け率変更
-            lsdyna["t_vid"]["yh"]             += [node.y * 1.1]  ##POINT
-            lsdyna["t_vid"]["zh"]             += [node.z]        ##POINT
+        if not boundary.nset_name in lsdyna["t_id"]["title"]:
+            for index, node in nset.iterrows():
+                vid = len(lsdyna["t_vid"]["vid"]) + 1
+                lsdyna["t_vid"]["vid"]            += [vid]
+                lsdyna["t_vid"]["xt"]             += [node.x]
+                lsdyna["t_vid"]["yt"]             += [node.y]
+                lsdyna["t_vid"]["zt"]             += [node.z]
+                lsdyna["t_vid"]["xh"]             += [node.x * 1.1]  ##円筒座標系のZ方向次第でXYZの掛け率変更
+                lsdyna["t_vid"]["yh"]             += [node.y * 1.1]  ##POINT
+                lsdyna["t_vid"]["zh"]             += [node.z]        ##POINT
 
-            id = len(lsdyna["t_id"]["id"]) + 1
-            lsdyna["t_id"]["id"]             += [id]
-            lsdyna["t_id"]["title"]          += [boundary.nset_name]
-            lsdyna["t_id"]["type"]           += ["node"]
+                id = len(lsdyna["t_id"]["id"]) + 1
+                lsdyna["t_id"]["id"]             += [id]
+                lsdyna["t_id"]["title"]          += [boundary.nset_name]
+                lsdyna["t_id"]["type"]           += ["node"]
 
-            lsdyna["t_id_node"]["id"]        += [id]
-            lsdyna["t_id_node"]["nid"]       += [node.node_id]
-            if node.ur3 == 1:
-                lsdyna["t_id_node"]["dof"]   += [4]
-            else:
+                lsdyna["t_id_node"]["id"]        += [id]
+                lsdyna["t_id_node"]["nid"]       += [node.node_id]
+
                 lsdyna["t_id_node"]["dof"]   += [-4]
-            lsdyna["t_id_node"]["vad"]       += [2]
-            lsdyna["t_id_node"]["lcid"]      += [lcid]    
-            lsdyna["t_id_node"]["vid"]       += [vid]
+                # test = abaqus["t_boundary_component"][abaqus["t_boundary_component"][""]]
+
+                # if node.ur3 == 1:
+                #     lsdyna["t_id_node"]["dof"]   += [4]
+                # else:
+                #     lsdyna["t_id_node"]["dof"]   += [-4]
+                
+                
+                
+                
+                lsdyna["t_id_node"]["vad"]       += [2]
+                lsdyna["t_id_node"]["lcid"]      += [lcid]    
+                lsdyna["t_id_node"]["vid"]       += [vid]
     else:
-        sid = len(lsdyna["t_sid"]["sid"]) + 1
-        lsdyna["t_sid"]["sid"]       += [sid]
-        lsdyna["t_sid"]["title"]     += [boundary.nset_name]
-        lsdyna["t_sid"]["type"]      += ["node"]
-        for index, node in abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name].iterrows():
-            lsdyna["t_sid_component"]["sid"]           += [sid]
-            lsdyna["t_sid_component"]["element_id"]    += [None]
-            lsdyna["t_sid_component"]["nid"]           += [node.node_id]
-        id = len(lsdyna["t_id"]["id"]) + 1
-        lsdyna["t_id"]["id"]                           += [id]
-        lsdyna["t_id"]["title"]                        += [boundary.nset_name]
-        lsdyna["t_id"]["type"]                         += ["set_node"]
-        lsdyna["t_id_set_node"]["id"]                  += [id]
-        lsdyna["t_id_set_node"]["sid"]                 += [sid]
-        if 1 <= float(boundary.freedom) and float(boundary.freedom) <= 3:
-            lsdyna["t_id_set_node"]["dof"]                 += [float(boundary.freedom)]
-        elif 4 <= float(boundary.freedom) and float(boundary.freedom) <= 6:
-            lsdyna["t_id_set_node"]["dof"]                 += [float(boundary.freedom) + 1]
-        lsdyna["t_id_set_node"]["vad"]                 += [2]
-        lsdyna["t_id_set_node"]["vid"]                 += [0]
-        lsdyna["t_id_set_node"]["lcid"]                += [lcid] 
+        
+        
+        if 1 <= int(boundary.freedom) and int(boundary.freedom) <= 3:
+            dof = int(boundary.freedom)
+        elif 4 <= int(boundary.freedom) and int(boundary.freedom) <= 6:
+            dof = int(boundary.freedom) + 1
+        else:
+            dof = 1
+
+        if len(nset) == 1:
+            #RIGIDの場合
+            id = len(lsdyna["t_id"]["id"]) + 1
+            lsdyna["t_id"]["id"]                       += [id]
+            lsdyna["t_id"]["title"]                    += [boundary.nset_name]
+            lsdyna["t_id"]["type"]                     += ["node"]
+            lsdyna["t_id_node"]["id"]                  += [id]
+            lsdyna["t_id_node"]["nid"]                 += [int(nset.iloc[0]["node_id"])]
+            lsdyna["t_id_node"]["dof"]                 += [dof]
+            lsdyna["t_id_node"]["vad"]                 += [2]
+            lsdyna["t_id_node"]["vid"]                 += [0]
+            lsdyna["t_id_node"]["lcid"]                += [lcid] 
+        else:
+            id = len(lsdyna["t_id"]["id"]) + 1
+            lsdyna["t_id"]["id"]                           += [id]
+            lsdyna["t_id"]["title"]                        += [boundary.nset_name]
+            lsdyna["t_id"]["type"]                         += ["set_node"]
+            if not boundary.nset_name in lsdyna["t_sid"]["title"]:
+                sid = len(lsdyna["t_sid"]["sid"]) + 1
+                lsdyna["t_sid"]["sid"]                     += [sid]
+                lsdyna["t_sid"]["title"]                   += [boundary.nset_name]
+                lsdyna["t_sid"]["type"]                    += ["node"]
+                for index, node in nset.iterrows():
+                    lsdyna["t_sid_component"]["sid"]           += [sid]
+                    lsdyna["t_sid_component"]["element_id"]    += [None]
+                    lsdyna["t_sid_component"]["nid"]           += [node.node_id]
+            else:
+                sid = lsdyna["t_sid"]["title"].index(boundary.nset_name) + 1
+                
+            lsdyna["t_id_set_node"]["id"]                  += [id]
+            lsdyna["t_id_set_node"]["sid"]                 += [sid]
+            lsdyna["t_id_set_node"]["dof"]                 += [dof]
+            lsdyna["t_id_set_node"]["vad"]                 += [2]
+            lsdyna["t_id_set_node"]["vid"]                 += [0]
+            lsdyna["t_id_set_node"]["lcid"]                += [lcid] 
+            
 
 for nid, row in abaqus["t_node_id"].iterrows():
-    lsdyna["t_nid"]["nid"]  += [nid]
+    lsdyna["t_nid"]["nid"]  += [row.node_id]
     lsdyna["t_nid"]["x"]    += [row.x]
     lsdyna["t_nid"]["y"]    += [row.y]
     lsdyna["t_nid"]["z"]    += [row.z]
@@ -531,12 +573,12 @@ for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
 
 
-print("create lsdyna")
+print("write dyna file")
 #write dyna file
 
 with open(output_path, mode='w') as f:
     f.write("*SECTION_SOLID_TITLE\n")
-    for pid, row in lsdyna["t_secid"].iterrows():
+    for index, row in lsdyna["t_secid"].iterrows():
         f.write(row.title)
         f.write("\n")
         f.write('{0: > #10}'.format(row.secid))
@@ -544,7 +586,7 @@ with open(output_path, mode='w') as f:
         f.write("\n")
 
     
-    for pid, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_part"], on='pid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_part"], on='pid', how='left').iterrows():
         if row.type == "part":
             f.write("*PART\n")
             f.write(row.title + "\n")
@@ -553,7 +595,7 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #10}'.format(int(row.mid)))
             f.write("\n")
 
-    for pid, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_rigid"], on='pid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_pid"], lsdyna["t_pid_rigid"], on='pid', how='left').iterrows():
         if row.type == "rigid":
             f.write("*CONSTRAINED_NODAL_RIGID_BODY_TITLE\n")
             f.write(row.title + "\n")
@@ -567,7 +609,7 @@ with open(output_path, mode='w') as f:
             #f.write('{0: > #10}'.format(7)) #con2
             #f.write("\n")
     
-    for mid, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
         if row.type == "elastic":
             f.write("*MAT_ELASTIC_TITLE\n")
             f.write(row.title + "\n")
@@ -577,7 +619,7 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #10}'.format(row.pr))        
             f.write("\n")
     
-    for mid, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left').iterrows():
         if row.type == "ogden":
             f.write("*MAT_OGDEN_RUBBER_TITLE\n")
             f.write(row.title + "\n")
@@ -605,7 +647,7 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #10f}'.format(0))     #alpha6   
             f.write("\n")
 
-    for cid, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
         if row.type == "exterior":
             f.write("*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID\n")
             f.write('{0: > #10}'.format(row.cid))
@@ -632,7 +674,7 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #10}'.format(5))         #depth
             f.write("\n")
     
-    for cid, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_surface"], on='cid', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_surface"], on='cid', how='left').iterrows():
         if row.type == "surface":
             f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
             f.write('{0: > #10}'.format(row.cid))
@@ -646,7 +688,7 @@ with open(output_path, mode='w') as f:
             f.write("\n")
             f.write("\n")
 
-    for sid, row in lsdyna["t_sid"].iterrows():
+    for index, row in lsdyna["t_sid"].iterrows():
         if row.type == "segment":
             f.write("*SET_SEGMENT_TITLE\n")
             f.write(row.title + "\n")
@@ -678,7 +720,7 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #20}'.format(row.o1))
             f.write("\n")
         
-    for cid, row in pd.merge(lsdyna["t_id_set_node"], lsdyna["t_id"], on='id', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_id_set_node"], lsdyna["t_id"], on='id', how='left').iterrows():
         f.write("*BOUNDARY_PRESCRIBED_MOTION_SET_ID\n")
         f.write('{0: > #10}'.format(row.id))
         f.write(row.title + "\n")
@@ -690,7 +732,7 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
 
-    for cid, row in pd.merge(lsdyna["t_id_node"], lsdyna["t_id"], on='id', how='left').iterrows():
+    for index, row in pd.merge(lsdyna["t_id_node"], lsdyna["t_id"], on='id', how='left').iterrows():
         f.write("*BOUNDARY_PRESCRIBED_MOTION_NODE_ID\n")
         f.write('{0: > #10}'.format(row.id))
         f.write(row.title + "\n")
@@ -702,7 +744,7 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
 
-    for nid, row in lsdyna["t_vid"].iterrows():
+    for index, row in lsdyna["t_vid"].iterrows():
         f.write("*DEFINE_VECTOR\n") 
         f.write('{0: > #10}'.format(int(row.vid)))
         f.write('{0:0< #10f}'.format(row.xt))
@@ -714,7 +756,7 @@ with open(output_path, mode='w') as f:
         f.write("\n")
 
     f.write("*ELEMENT_SOLID\n")
-    for pid, row in lsdyna["t_eid"].iterrows():
+    for index, row in lsdyna["t_eid"].iterrows():
         f.write('{0: > #8}'.format(row.eid))
         f.write('{0: > #8}'.format(row.pid))
         f.write("\n")
@@ -729,13 +771,11 @@ with open(output_path, mode='w') as f:
         f.write("\n")
 
     f.write("*NODE\n")
-    for pid, row in lsdyna["t_nid"].iterrows():
+    for index, row in lsdyna["t_nid"].iterrows():
         f.write('{0: > #8}'.format(int(row.nid)))
         f.write('{0:0< #16f}'.format(float(row.x)))
         f.write('{0:0< #16f}'.format(float(row.y)))
         f.write('{0:0< #16f}'.format(float(row.z)))
-        f.write('{0: > #8}'.format(0))
-        f.write('{0: > #8}'.format(0))
         f.write('{0: > #8}'.format(float(row.tc)))
         f.write('{0: > #8}'.format(float(row.rc)))
         f.write("\n")
