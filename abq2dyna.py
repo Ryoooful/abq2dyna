@@ -2,8 +2,8 @@
 import pandas as pd
 import sys
 
-input_path = r"C:\Temp\abq2dyna.inp"
-output_path = r"C:\Users\1080045106\Desktop\dyna.key"
+input_path = r"C:\Users\Ryoooful\OneDrive\Desktop\model5_newa.inp"
+output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
 keyword = ""
 
 #Abaqusファイルのテーブル構造
@@ -25,7 +25,8 @@ abaqus = {
     "t_transform_component":{"transform_name":[], "nset_name":[]},
     "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "time":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
-    "t_step_name":          {"step_name":[], "step_id":[]}, 
+    "t_step_name":          {"step_name":[], "step_id":[], "time":[]}, 
+    "t_mass_scaling":       {"dt":[], "type":[], "frequency":[]}, 
     "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[]},
     "t_boundary_component": {"boundary_id":[], "freedom":[], "amount":[]}
         }
@@ -57,7 +58,7 @@ def get_name(name_label, spdata):
     for sp in spdata[1:]:
         if name_label + "=" in sp:
             return str(sp.split("=")[1])
-    return ""
+    return None
 
 def get_bool(label, spdata, yesno):
     for sp in spdata[1:]:
@@ -80,7 +81,7 @@ with open(input_path) as f:
 
 #Abaqusファイルのテキストデータを１行ずつ読み込む
 for line in lines:
-    #コメント分はスキップする。
+    #コメント文はスキップする。
     if "**" == line[:2]:
         continue
     
@@ -141,11 +142,16 @@ for line in lines:
             step_name = get_name("name", spdata)
             abaqus["t_step_name"]["step_id"]                += [len(abaqus["t_step_name"]["step_id"]) + 1]
             abaqus["t_step_name"]["step_name"]              += [step_name]
+            abaqus["t_step_name"]["time"]                   += [0]
+        elif "*Variable Mass Scaling" == keyword: 
+            abaqus["t_mass_scaling"]["dt"]                  += [get_name("dt", spdata)]
+            abaqus["t_mass_scaling"]["type"]                += [get_name("type", spdata)]
+            abaqus["t_mass_scaling"]["frequency"]           += [get_name("frequency", spdata)]
         elif "*Boundary" == keyword:
             boundary_id = len(abaqus["t_boundary_id"]["boundary_id"]) + 1
             abaqus["t_boundary_id"]["boundary_id"]          += [boundary_id]
             abaqus["t_boundary_id"]["step_name"]            += [step_name]
-            abaqus["t_boundary_id"]["nset_name"]            += [""]
+            abaqus["t_boundary_id"]["nset_name"]            += [None]
             abaqus["t_boundary_id"]["amplitude_name"]       += [get_name("amplitude", spdata)]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
                 abaqus["t_boundary_id"][col] += [0]
@@ -216,14 +222,14 @@ for line in lines:
     elif keyword == "*Hyperelastic": 
         abaqus["t_material_name"]["hyperelastic"][len(abaqus["t_material_name"]["hyperelastic"]) - 1]     = [float(st) for st in spdata[:6]]
         keyword = ""
+    elif keyword == "*Dynamic": 
+        abaqus["t_step_name"]["time"][-1]               =  spdata[1]
     elif keyword == "*Boundary": 
         abaqus["t_boundary_id"]["nset_name"][-1]         =  spdata[0]
         abaqus["t_boundary_component"]["boundary_id"]     += [boundary_id]
         abaqus["t_boundary_component"]["freedom"]       += [spdata[1]]
-        #abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 3]][-1] = 1
         if len(spdata) == 4:
             abaqus["t_boundary_component"]["amount"]    += [float(spdata[3])]
-            #abaqus["t_boundary_id"][list(abaqus["t_boundary_id"].keys())[int(spdata[1]) + 9]][-1] = float(spdata[3])
         else:
             abaqus["t_boundary_component"]["amount"]    += [0]
     elif keyword == "*Amplitude": 
@@ -237,7 +243,7 @@ for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
 print("inputfile loaded")
-# sys.exit()
+
 #Convert .k 
 
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
@@ -260,6 +266,8 @@ for index, row in tmp.iterrows():
             lsdyna["t_secid"]["elform"]   += [10]
         else:
             lsdyna["t_secid"]["elform"]   += [13]
+    else:
+        lsdyna["t_secid"]["elform"]   += [0]
     
     #パートを設定する
     lsdyna["t_pid"]["pid"]              += [pid]
@@ -288,7 +296,7 @@ for index, row in tmp.iterrows():
         for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
             lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
     else:
-        lsdyna["t_mid"]["type"]            += ["elastic"]
+        lsdyna["t_mid"]["type"]           += ["elastic"]
         lsdyna["t_mid_elastic"]["mid"]    += [mid]
         lsdyna["t_mid_elastic"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"])]
@@ -310,8 +318,9 @@ tmp = pd.merge(tmp, abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_segment_component"] = pd.merge(tmp, abaqus["t_element_id"], on='element_id', how='left')
 del tmp
 
-#elsetからサーフェスに変換する
+#要素の面番号から節点集合に変更する
 def create_set_node_from_surface(sid, set_type, heading):
+    #abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == heading].to_csv("C:\\Users\\Ryoooful\\OneDrive\\Desktop\\" + heading + ".csv")
     for index, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == heading].iterrows():
         #要素タイプから指定面の節点IDを抽出する。
         if row.element_type == "C3D4":
@@ -323,8 +332,29 @@ def create_set_node_from_surface(sid, set_type, heading):
                 plane = [row.node_ids[2], row.node_ids[3], row.node_ids[1]]
             elif row.identification == "S4":
                 plane = [row.node_ids[0], row.node_ids[3], row.node_ids[2]]
-        elif element_type == "S3R":
+        elif row.element_type == "C3D6":
+            plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4]]
+        elif row.element_type == "C3D8R":
+            if row.identification == "S1":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S2":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S3":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S4":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S5":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S6":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S7":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+            elif row.identification == "S8":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+        elif row.element_type == "S3R":
             plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+        elif row.element_type == "S4R":
+            plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3]]
         else:
             plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
 
@@ -362,61 +392,9 @@ for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
     create_set_node_from_surface(sid_master, "segment", row.master_surface)
 
-# #変位量がある拘束は削除する。
-# tmp = pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left')
-# tmp = tmp[tmp["amount"].isnull()].drop(['boundary_id', 'step_name', 'amplitude_name', 'amount'], axis=1)
-# tmp = tmp[~tmp.duplicated()]
-
-# #拘束がある場合はチェックつける。
-# for index, row in abaqus["t_boundary_id"].iterrows():
-#     for index2, row2 in tmp[tmp["nset_name"] == row.nset_name].iterrows():
-#         abaqus["t_boundary_id"].iat[index, int(row2.freedom) + 3] = 1
-# del tmp
-
-#初期条件時の拘束をt_node_idに付与する。
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
-
-tmp = abaqus["t_transform_component"][abaqus["t_transform_component"]["type"] == ""]
-tmp = pd.merge(abaqus["t_transform_component"], abaqus["t_boundary_id"], on='nset_name', how='left')
-tmp = pd.merge(tmp, abaqus["t_nset_component"], on='nset_name', how='left')
-tmp = pd.merge(abaqus["t_node_id"], tmp, on='node_id', how='left').loc[:,["node_id", "x", "y", "z"]]
-
-#abaqus["t_node_id"] = tmp.groupby("node_id").min()
-
 abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
-del tmp
-
-# tmp = abaqus["t_boundary_component"].drop(['freedom'], axis=1).groupby("boundary_id").max().isnull()
-# print(tmp)
-# tmp = pd.merge(abaqus["t_boundary_id"], tmp, on='boundary_id', how='left')
-
-
 abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
-# del tmp
-
-#print(abaqus["t_boundary_component"].dropna(subset=['amount']))
-
-
-def get_node_on_translation(freedom1, freedom2, freedom3):
-    if freedom1 == 1 and freedom2 == 0 and freedom3 == 0:
-        return 1
-    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 0:
-        return 2
-    elif freedom1 == 0 and freedom2 == 0 and freedom3 == 1:
-        return 3
-    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 0:
-        return 4
-    elif freedom1 == 0 and freedom2 == 1 and freedom3 == 1:
-        return 5
-    elif freedom1 == 1 and freedom2 == 0 and freedom3 == 1:
-        return 6
-    elif freedom1 == 1 and freedom2 == 1 and freedom3 == 1:
-        return 7
-    else:
-        return 0
-
-
-
 
 #剛体を作成する
 for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component"], on='nset_name', how='left').iterrows():
@@ -424,11 +402,10 @@ for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component
     lsdyna["t_sid"]["sid"]                     += [sid]
     lsdyna["t_sid"]["type"]                    += ["node"]
     lsdyna["t_sid"]["title"]                   += [row.surface_name]
-    # lsdyna["t_sid_component"]["sid"]           += [sid] #POINT
-    # lsdyna["t_sid_component"]["element_id"]    += [None]
-    # lsdyna["t_sid_component"]["nid"]           += [row.node_id]
-    create_set_node_from_surface(sid, "node", row.surface_name)
-    
+    lsdyna["t_sid_component"]["sid"]           += [sid]
+    lsdyna["t_sid_component"]["element_id"]    += [None]
+    lsdyna["t_sid_component"]["nid"]           += [row.node_id]
+    create_set_node_from_surface(sid, "node", row.surface_name)    
     pid = len(lsdyna["t_pid"]["pid"]) + 1
     lsdyna["t_pid"]["pid"]                     += [pid]
     lsdyna["t_pid"]["title"]                   += [row.constraint_name]
@@ -437,29 +414,21 @@ for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component
     lsdyna["t_pid_rigid"]["cid"]               += [0]
     lsdyna["t_pid_rigid"]["nsid"]              += [sid]
     lsdyna["t_pid_rigid"]["pnode"]             += [row.node_id]
-    # lsdyna["t_pid_rigid"]["cmo"]               += [0]
-    # lsdyna["t_pid_rigid"]["con1"]              += [0]
-    # lsdyna["t_pid_rigid"]["con2"]              += [0]
-    # lsdyna["t_pid_rigid"]["con1"]              += [get_node_on_translation(row.u1, row.u2, row.u3)]
-    # lsdyna["t_pid_rigid"]["con2"]              += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
 
 
-
-lsdyna["t_lcid"]["lcid"]      += [1]
-lsdyna["t_lcid"]["title"]     += ["default"]
-lsdyna["t_lcid_time"]["lcid"] += [1]
-lsdyna["t_lcid_time"]["a1"]   += [0]
-lsdyna["t_lcid_time"]["o1"]   += [0]
-lsdyna["t_lcid_time"]["lcid"] += [1]
-lsdyna["t_lcid_time"]["a1"]   += [abaqus["t_amplitude_component"].max()["time"]]
-lsdyna["t_lcid_time"]["o1"]   += [0]
-
-
-#print(pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left'))
+endtim = abaqus["t_amplitude_component"].max()["time"]
+lsdyna["t_lcid"]["lcid"]            += [1]
+lsdyna["t_lcid"]["title"]           += ["default"]
+lsdyna["t_lcid_time"]["lcid"]       += [1]
+lsdyna["t_lcid_time"]["a1"]         += [0]
+lsdyna["t_lcid_time"]["o1"]         += [0]
+lsdyna["t_lcid_time"]["lcid"]       += [1]
+lsdyna["t_lcid_time"]["a1"]         += [endtim]
+lsdyna["t_lcid_time"]["o1"]         += [0]
 
 for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').iterrows():
     lcid = 1
-    if boundary.amplitude_name != "":
+    if boundary.amplitude_name != None:
         lcid_name = str(boundary.amplitude_name) + "," + str(boundary.amount)
         if lcid_name in lsdyna["t_lcid"]["title"]:
             lcid = lsdyna["t_lcid"]["lcid"][lsdyna["t_lcid"]["title"].index(lcid_name)]
@@ -496,18 +465,10 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
 
                 lsdyna["t_id_node"]["id"]        += [id]
                 lsdyna["t_id_node"]["nid"]       += [node.node_id]
-
-                lsdyna["t_id_node"]["dof"]   += [-4]
-                # test = abaqus["t_boundary_component"][abaqus["t_boundary_component"][""]]
-
-                # if node.ur3 == 1:
-                #     lsdyna["t_id_node"]["dof"]   += [4]
-                # else:
-                #     lsdyna["t_id_node"]["dof"]   += [-4]
-                
-                
-                
-                
+                if 6 == int(abaqus["t_boundary_component"][abaqus["t_boundary_component"]["boundary_id"] == boundary.boundary_id].groupby("boundary_id").max().iloc[0]["freedom"]):
+                    lsdyna["t_id_node"]["dof"]   += [4]
+                else:
+                    lsdyna["t_id_node"]["dof"]   += [-4]
                 lsdyna["t_id_node"]["vad"]       += [2]
                 lsdyna["t_id_node"]["lcid"]      += [lcid]    
                 lsdyna["t_id_node"]["vid"]       += [vid]
@@ -527,6 +488,7 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
             lsdyna["t_id"]["id"]                       += [id]
             lsdyna["t_id"]["title"]                    += [boundary.nset_name]
             lsdyna["t_id"]["type"]                     += ["node"]
+
             lsdyna["t_id_node"]["id"]                  += [id]
             lsdyna["t_id_node"]["nid"]                 += [int(nset.iloc[0]["node_id"])]
             lsdyna["t_id_node"]["dof"]                 += [dof]
@@ -538,6 +500,8 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
             lsdyna["t_id"]["id"]                           += [id]
             lsdyna["t_id"]["title"]                        += [boundary.nset_name]
             lsdyna["t_id"]["type"]                         += ["set_node"]
+            
+            #SET_NODEを作成する
             if not boundary.nset_name in lsdyna["t_sid"]["title"]:
                 sid = len(lsdyna["t_sid"]["sid"]) + 1
                 lsdyna["t_sid"]["sid"]                     += [sid]
@@ -565,11 +529,9 @@ for nid, row in abaqus["t_node_id"].iterrows():
     lsdyna["t_nid"]["z"]    += [row.z]
     lsdyna["t_nid"]["tc"]   += [0]
     lsdyna["t_nid"]["rc"]   += [0]
-    # lsdyna["t_nid"]["tc"]   += [get_node_on_translation(row.u1, row.u2, row.u3)]
-    # lsdyna["t_nid"]["rc"]   += [get_node_on_translation(row.ur1, row.ur2, row.ur3)]
 
 
-for st in lsdyna.keys():
+for st in lsdyna.keys():    
     lsdyna[st] = create_table(lsdyna[st])
 
 
@@ -577,6 +539,65 @@ print("write dyna file")
 #write dyna file
 
 with open(output_path, mode='w') as f:
+    f.write("*KEYWORD\n")
+
+    f.write("*TITLE\n")
+    f.write(input_path)
+    f.write("\n")
+
+    f.write("*CONTROL_ACCURACY\n")
+    f.write('{0: > #10}'.format(1)) #osu
+    f.write('{0: > #10}'.format(4)) #inn
+    f.write('{0: > #10}'.format(0)) #pidosu
+    f.write("\n")
+
+    f.write("*CONTROL_CONTACT\n")
+    f.write(" 0.0000000 0.0000000         0         0         0         0         0         0\n")   #slsfac    rwpnal    islchk    shlthk    penopt    thkchg     orien    enmass
+    f.write("\n")
+    f.write("         0         0         0         0 0.0000000         0         0         0\n")   #usrstr    usrfrc     nsbcs    interm     xpene     ssthk      ecdt   tiedprj
+    f.write("\n")
+    f.write(" 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000          \n")   #sfric     dfric       edc       vfc        th     th_sf    pen_sf     ptscl
+    f.write("\n")
+    f.write("         2         0         0         0         0         0 0.0000000\n")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
+    f.write("\n")
+    f.write("         1         0         1 0.0000000 1.0000000         0 0.0000000         0\n")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
+    f.write("\n")
+    f.write("         0         0         0         0         0           0.0000000          \n")   #shledg    pstiff    ithcnt    tdcnof     ftall              shltrw    igactc
+    f.write("\n")
+
+    f.write("*CONTROL_ENERGY\n")
+    f.write('{0: > #10}'.format(2)) #hgen
+    f.write('{0: > #10}'.format(2)) #rwen
+    f.write('{0: > #10}'.format(2)) #slnten
+    f.write('{0: > #10}'.format(2)) #rylen
+    f.write("\n")
+
+    f.write("*CONTROL_HOURGLASS\n")
+    f.write('{0: > #10}'.format(5))    #ihq
+    f.write('{0: > #10}'.format(0.05)) #qh
+    f.write("\n")
+
+    f.write("*CONTROL_TIMESTEP\n")
+    f.write('{0: > #10f}'.format(0))        #dtinit
+    f.write('{0: > #10f}'.format(0.9))      #tssfac
+    f.write('{0: > #10}'.format(5))         #isdo
+    f.write('{0: > #10f}'.format(0))        #tslimt
+    f.write('{0: > #10}'.format(-0.000005)) #dt2ms
+    f.write('{0: > #10}'.format(0))         #lctm
+    f.write('{0: > #10}'.format(0))         #erode
+    f.write('{0: > #10}'.format(0))         #ms1st
+    f.write("\n")
+    f.write('{0: > #10}'.format(0))         #dt2msf
+    f.write('{0: > #10}'.format(0))         #dt2mslc
+    f.write('{0: > #10}'.format(0))         #imscl
+    f.write('{0: > #30}'.format(0))         #rmscl
+    f.write("\n")
+
+    f.write("*CONTROL_TERMINATION\n")
+    f.write('{0: > #10}'.format(endtim)) #endtim
+    f.write("\n")
+
+
     f.write("*SECTION_SOLID_TITLE\n")
     for index, row in lsdyna["t_secid"].iterrows():
         f.write(row.title)
@@ -600,14 +621,10 @@ with open(output_path, mode='w') as f:
             f.write("*CONSTRAINED_NODAL_RIGID_BODY_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.pid))
-            f.write("          ")           #cid
+            f.write("          ")                       #cid
             f.write('{0: > #10}'.format(row.nsid))
-            f.write('{0: > #10}'.format(row.pnode))    #pnode
+            f.write('{0: > #10}'.format(row.pnode))
             f.write("\n")
-            #f.write('{0: > #10}'.format(1)) #com
-            #f.write('{0: > #10}'.format(5)) #con1
-            #f.write('{0: > #10}'.format(7)) #con2
-            #f.write("\n")
     
     for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
         if row.type == "elastic":
@@ -704,7 +721,7 @@ with open(output_path, mode='w') as f:
             f.write("*SET_NODE_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.sid))
-            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].reset_index().iterrows():
+            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].sort_values("nid").reset_index().iterrows():
                 if index % 8 == 0: 
                     f.write("\n")
                 f.write('{0: > #10}'.format(row.nid))
@@ -780,7 +797,7 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #8}'.format(float(row.rc)))
         f.write("\n")
 
-    
+    f.write("*END\n")
 
 print("end")
 
