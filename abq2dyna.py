@@ -2,7 +2,7 @@
 import pandas as pd
 import sys
 import os
-input_path = r"C:\Temp\abq2dyna.inp"
+input_path = r"C:\temp\abq2dyna.inp"
 
 output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + "111.key"
 
@@ -27,8 +27,8 @@ abaqus = {
     "t_transform_component":{"transform_name":[], "nset_name":[]},
     "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "time":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
-    "t_step_name":          {"step_name":[], "step_id":[], "time":[]}, 
     "t_mass_scaling":       {"dt":[], "type":[], "frequency":[]}, 
+    "t_step_name":          {"step_name":[], "step_id":[], "time":[]}, 
     "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[]},
     "t_boundary_component": {"boundary_id":[], "freedom":[], "amount":[]}
         }
@@ -244,15 +244,15 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
+sys.exit()
 print("inputfile loaded")
 
 #Convert .k 
 
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
+tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby(['solid_id', "element_type"], as_index=False).max()
 
-tmp = abaqus["q_part_component"][['solid_id','elset_name','material_name','element_type']].groupby('solid_id').max().reset_index()
-tmp.index = tmp.index + 1
 for index, row in tmp.iterrows():
     mat = abaqus["t_material_name"][abaqus["t_material_name"]['material_name'] == row.material_name].iloc[0]
     secid = len(lsdyna["t_secid"]["secid"]) + 1
@@ -297,8 +297,14 @@ for index, row in tmp.iterrows():
         lsdyna["t_mid_ogden"]["mid"]    += [mid]
         lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_ogden"]["pr"]     += [0.499]
-        for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
-            lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
+        lsdyna["t_mid_ogden"]["mu1"]    += [mat["hyperelastic"][0]]
+        lsdyna["t_mid_ogden"]["alpha1"] += [mat["hyperelastic"][1]]
+        lsdyna["t_mid_ogden"]["mu2"]    += [mat["hyperelastic"][2]]
+        lsdyna["t_mid_ogden"]["alpha2"] += [mat["hyperelastic"][3]]
+        lsdyna["t_mid_ogden"]["mu3"]    += [mat["hyperelastic"][4]]
+        lsdyna["t_mid_ogden"]["alpha3"] += [mat["hyperelastic"][5]]
+        # for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
+        #     lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
     else:
         lsdyna["t_mid"]["type"]           += ["elastic"]
         lsdyna["t_mid_elastic"]["mid"]    += [mid]
@@ -439,6 +445,7 @@ lsdyna["t_lcid_time"]["o1"]         += [0]
 lsdyna["t_lcid_time"]["lcid"]       += [1]
 lsdyna["t_lcid_time"]["a1"]         += [endtim]
 lsdyna["t_lcid_time"]["o1"]         += [0]
+
 
 for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').iterrows():
     lcid = 1
