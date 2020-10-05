@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-. 
 import pandas as pd
 import sys
+import os
+input_path = r"C:\Temp\abq2dyna.inp"
 
-input_path = r"C:\Users\Ryoooful\OneDrive\Desktop\model5_newa.inp"
-output_path = r"C:\Users\Ryoooful\OneDrive\Desktop\dyna.key"
+output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + "111.key"
+
 keyword = ""
 
 #Abaqusファイルのテーブル構造
@@ -263,8 +265,10 @@ for index, row in tmp.iterrows():
     lsdyna["t_secid"]["title"]    += [row.elset_name]
     if row.element_type == "C3D4":
         if len(mat["hyperelastic"]) == 0:
+            #1点積分四面体要素
             lsdyna["t_secid"]["elform"]   += [10]
         else:
+            #1点積分節点圧力四面体要素
             lsdyna["t_secid"]["elform"]   += [13]
     else:
         lsdyna["t_secid"]["elform"]   += [0]
@@ -298,8 +302,8 @@ for index, row in tmp.iterrows():
     else:
         lsdyna["t_mid"]["type"]           += ["elastic"]
         lsdyna["t_mid_elastic"]["mid"]    += [mid]
-        lsdyna["t_mid_elastic"]["ro"]     += [float(mat["density"])]
-        lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"])]
+        lsdyna["t_mid_elastic"]["ro"]     += [float(mat["density"] /1000000000000)]
+        lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"] /10000000)]
         lsdyna["t_mid_elastic"]["pr"]     += [float(mat["poason"])]
 del tmp
 
@@ -323,6 +327,7 @@ def create_set_node_from_surface(sid, set_type, heading):
     #abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == heading].to_csv("C:\\Users\\Ryoooful\\OneDrive\\Desktop\\" + heading + ".csv")
     for index, row in abaqus["q_segment_component"][abaqus["q_segment_component"]["surface_name"] == heading].iterrows():
         #要素タイプから指定面の節点IDを抽出する。
+        #4面体要素
         if row.element_type == "C3D4":
             if row.identification == "S1":
                 plane = [row.node_ids[2], row.node_ids[1], row.node_ids[0]]
@@ -332,27 +337,36 @@ def create_set_node_from_surface(sid, set_type, heading):
                 plane = [row.node_ids[2], row.node_ids[3], row.node_ids[1]]
             elif row.identification == "S4":
                 plane = [row.node_ids[0], row.node_ids[3], row.node_ids[2]]
+        #5面体(3角柱)要素
         elif row.element_type == "C3D6":
-            plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4]]
+            if row.identification == "S1":
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+            elif row.identification == "S2":
+                plane = [row.node_ids[3], row.node_ids[5], row.node_ids[4]]
+            elif row.identification == "S3":
+                plane = [row.node_ids[0], row.node_ids[3], row.node_ids[4], row.node_ids[1]]
+            elif row.identification == "S4":
+                plane = [row.node_ids[1], row.node_ids[4], row.node_ids[5], row.node_ids[2]]
+            elif row.identification == "S5":
+                plane = [row.node_ids[2], row.node_ids[5], row.node_ids[3], row.node_ids[0]]
+        #6面体要素
         elif row.element_type == "C3D8R":
             if row.identification == "S1":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3]]
             elif row.identification == "S2":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[4], row.node_ids[7], row.node_ids[6], row.node_ids[5]]
             elif row.identification == "S3":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[0], row.node_ids[4], row.node_ids[5], row.node_ids[1]]
             elif row.identification == "S4":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[1], row.node_ids[5], row.node_ids[6], row.node_ids[2]]
             elif row.identification == "S5":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[2], row.node_ids[6], row.node_ids[7], row.node_ids[3]]
             elif row.identification == "S6":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
-            elif row.identification == "S7":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
-            elif row.identification == "S8":
-                plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3], row.node_ids[4], row.node_ids[5], row.node_ids[6]]
+                plane = [row.node_ids[3], row.node_ids[7], row.node_ids[4], row.node_ids[0]]
+        #3角面
         elif row.element_type == "S3R":
             plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2]]
+        #4角面
         elif row.element_type == "S4R":
             plane = [row.node_ids[0], row.node_ids[1], row.node_ids[2], row.node_ids[3]]
         else:
@@ -552,17 +566,17 @@ with open(output_path, mode='w') as f:
     f.write("\n")
 
     f.write("*CONTROL_CONTACT\n")
-    f.write(" 0.0000000 0.0000000         0         0         0         0         0         0\n")   #slsfac    rwpnal    islchk    shlthk    penopt    thkchg     orien    enmass
+    f.write(" 0.0000000 0.0000000         0         0         0         0         0         0")   #slsfac    rwpnal    islchk    shlthk    penopt    thkchg     orien    enmass
     f.write("\n")
-    f.write("         0         0         0         0 0.0000000         0         0         0\n")   #usrstr    usrfrc     nsbcs    interm     xpene     ssthk      ecdt   tiedprj
+    f.write("         0         0         0         0 0.0000000         0         0         0")   #usrstr    usrfrc     nsbcs    interm     xpene     ssthk      ecdt   tiedprj
     f.write("\n")
-    f.write(" 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000          \n")   #sfric     dfric       edc       vfc        th     th_sf    pen_sf     ptscl
+    f.write(" 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000 0.0000000          ")   #sfric     dfric       edc       vfc        th     th_sf    pen_sf     ptscl
     f.write("\n")
-    f.write("         2         0         0         0         0         0 0.0000000\n")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
+    f.write("         2         0         0         0         0         0 0.0000000")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
     f.write("\n")
-    f.write("         1         0         1 0.0000000 1.0000000         0 0.0000000         0\n")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
+    f.write("         1         0         1 0.0000000 1.0000000         0 0.0000000         0")   #ignore    frceng   skiprwg    outseg   spotstp   spotdel   spothin
     f.write("\n")
-    f.write("         0         0         0         0         0           0.0000000          \n")   #shledg    pstiff    ithcnt    tdcnof     ftall              shltrw    igactc
+    f.write("         0         0         0         0         0           0.0000000          ")   #shledg    pstiff    ithcnt    tdcnof     ftall              shltrw    igactc
     f.write("\n")
 
     f.write("*CONTROL_ENERGY\n")
@@ -578,10 +592,10 @@ with open(output_path, mode='w') as f:
     f.write("\n")
 
     f.write("*CONTROL_TIMESTEP\n")
-    f.write('{0: > #10f}'.format(0))        #dtinit
-    f.write('{0: > #10f}'.format(0.9))      #tssfac
-    f.write('{0: > #10}'.format(5))         #isdo
-    f.write('{0: > #10f}'.format(0))        #tslimt
+    f.write('{0:0< #10f}'.format(0))        #dtinit
+    f.write('{0:0< #10f}'.format(0.9))      #tssfac
+    f.write('{0: > #10}'.format(0))         #isdo
+    f.write('{0:0< #10f}'.format(0))        #tslimt
     f.write('{0: > #10}'.format(-0.000005)) #dt2ms
     f.write('{0: > #10}'.format(0))         #lctm
     f.write('{0: > #10}'.format(0))         #erode
@@ -621,9 +635,12 @@ with open(output_path, mode='w') as f:
             f.write("*CONSTRAINED_NODAL_RIGID_BODY_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.pid))
-            f.write("          ")                       #cid
-            f.write('{0: > #10}'.format(row.nsid))
-            f.write('{0: > #10}'.format(row.pnode))
+            f.write('{: <10}'.format(""))               #cid
+            f.write('{0: > #10}'.format(int(row.nsid))) #nsid
+            f.write('{0: > #10}'.format(int(row.pnode)))#pnode
+            f.write('{: <10}'.format(""))               #iprt
+            f.write('{: <10}'.format(""))               #drflag
+            f.write('{: <10}'.format(""))               #rrflag
             f.write("\n")
     
     for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
@@ -631,9 +648,12 @@ with open(output_path, mode='w') as f:
             f.write("*MAT_ELASTIC_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.mid))
-            f.write('{0: > #10}'.format(row.ro))       
-            f.write('{0: > #10}'.format(row.e))         
-            f.write('{0: > #10}'.format(row.pr))        
+            f.write('{0: <10}'.format('{:.3e}'.format(row.ro)))       
+            f.write('{0: > #10}'.format(row.e))       
+            f.write('{0:0< #10f}'.format(row.pr))        
+            f.write('{: <10}'.format(""))           #da
+            f.write('{: <10}'.format(""))           #db
+            f.write('{: <10}'.format(""))           #k
             f.write("\n")
     
     for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left').iterrows():
@@ -641,53 +661,66 @@ with open(output_path, mode='w') as f:
             f.write("*MAT_OGDEN_RUBBER_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.mid))
-            f.write('{0: > #10}'.format(row.ro))             
-            f.write('{0: > #10}'.format(row.pr))       
+            f.write('{0: <10}'.format('{:.3e}'.format(row.ro)))                  
+            f.write('{0:0< #10f}'.format(row.pr))       
             f.write('{0: > #10}'.format(0))      #n
             f.write('{0: > #10}'.format(3))      #nv
-            f.write('{0: > #10f}'.format(1))     #g
-            f.write('{0: > #10f}'.format(0.001)) #nv
-            f.write('{0: > #10f}'.format(0))     #ref
+            f.write('{0:0< #10f}'.format(1))     #g
+            f.write('{0:0< #10f}'.format(0.001)) #nv
+            f.write('{0:0< #10f}'.format(0))     #ref
             f.write("\n")
-            f.write('{0: > #10f}'.format(row.mu1))
-            f.write('{0: > #10f}'.format(row.mu2))             
-            f.write('{0: > #10f}'.format(row.mu3))     
-            f.write('{0: > #10f}'.format(0))     #mu4
-            f.write('{0: > #10f}'.format(0))     #mu5             
-            f.write('{0: > #10f}'.format(0))     #mu6   
+            f.write('{0:0< #10f}'.format(row.mu1))
+            f.write('{0:0< #10f}'.format(row.mu2))             
+            f.write('{0:0< #10f}'.format(row.mu3))     
+            f.write('{0:0< #10f}'.format(0))     #mu4
+            f.write('{0:0< #10f}'.format(0))     #mu5             
+            f.write('{0:0< #10f}'.format(0))     #mu6   
             f.write("\n")
-            f.write('{0: > #10f}'.format(row.alpha1))
-            f.write('{0: > #10f}'.format(row.alpha2))             
-            f.write('{0: > #10f}'.format(row.alpha3))     
-            f.write('{0: > #10f}'.format(0))     #alpha4
-            f.write('{0: > #10f}'.format(0))     #alpha5             
-            f.write('{0: > #10f}'.format(0))     #alpha6   
+            f.write('{0:0< #10f}'.format(row.alpha1))
+            f.write('{0:0< #10f}'.format(row.alpha2))             
+            f.write('{0:0< #10f}'.format(row.alpha3))     
+            f.write('{0:0< #10f}'.format(0))     #alpha4
+            f.write('{0:0< #10f}'.format(0))     #alpha5             
+            f.write('{0:0< #10f}'.format(0))     #alpha6   
             f.write("\n")
 
     for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
         if row.type == "exterior":
             f.write("*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID\n")
             f.write('{0: > #10}'.format(row.cid))
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.ssid))
+            f.write('{: <70}'.format(row.title) + "\n")  
+            f.write('{0: > #10}'.format(int(row.ssid)))
             f.write('{0: > #10}'.format(0))         #msid
-            f.write('{0: > #10}'.format(row.sstyp)) 
+            f.write('{0: > #10}'.format(int(row.sstyp))) #sstyp
             f.write('{0: > #10}'.format(0))         #mstyp
+            f.write('{: <10}'.format(""))           #sboxid
+            f.write('{: <10}'.format(""))           #mboxid
+            f.write('{: <10}'.format(""))           #spr
+            f.write('{: <10}'.format(""))           #mpr
             f.write("\n")
-            f.write('{0: > #10}'.format(0.1))       #fs
-            f.write('{0: > #10}'.format(0.1))       #fd
-            f.write("          ")                   #dc
-            f.write("          ")                   #vc
-            f.write('{0: > #10}'.format(20))        #vdc
+            f.write('{0:0< #10f}'.format(0.1))       #fs
+            f.write('{0:0< #10f}'.format(0.1))       #fd
+            f.write('{: <10}'.format(""))           #dc
+            f.write('{: <10}'.format(""))           #vc
+            f.write('{0:0< #10f}'.format(20))        #vdc
+            f.write('{: <10}'.format(""))           #penchk
+            f.write('{: <10}'.format(""))           #bt
+            f.write('{: <10}'.format(""))           #dt
             f.write("\n")
-            f.write('{0: > #10}'.format(2))         #sfs
-            f.write('{0: > #10}'.format(2))         #sfm
+            f.write('{0:0< #10f}'.format(2))        #sfs
+            f.write('{0:0< #10f}'.format(2))        #sfm
+            f.write('{: <10}'.format(""))           #sst
+            f.write('{: <10}'.format(""))           #mst
+            f.write('{: <10}'.format(""))           #sfst
+            f.write('{: <10}'.format(""))           #sfmt
+            f.write('{: <10}'.format(""))           #fsf
+            f.write('{: <10}'.format(""))           #vsf
             f.write("\n")
             f.write('{0: > #10}'.format(2))         #soft
-            f.write("          ")                   #sofscl
-            f.write("          ")                   #lcidab
-            f.write("          ")                   #maxpar
-            f.write('{0: > #10}'.format(3))         #sbopt
+            f.write('{: <10}'.format(""))           #sofscl
+            f.write('{: <10}'.format(""))           #lcidab
+            f.write('{: <10}'.format(""))           #maxpar
+            f.write('{0:0< #10f}'.format(3))        #sbopt
             f.write('{0: > #10}'.format(5))         #depth
             f.write("\n")
     
@@ -695,36 +728,70 @@ with open(output_path, mode='w') as f:
         if row.type == "surface":
             f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
             f.write('{0: > #10}'.format(row.cid))
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.ssid))
-            f.write('{0: > #10}'.format(row.msid))
-            f.write('{0: > #10}'.format(row.sstyp))
-            f.write('{0: > #10}'.format(row.mstyp))
+            f.write('{: <70}'.format(row.title) + "\n")  
+            f.write('{0: > #10}'.format(int(row.ssid)))  #ssid
+            f.write('{0: > #10}'.format(int(row.msid)))        #msid
+            f.write('{0: > #10}'.format(int(row.sstyp))) #sstyp
+            f.write('{0: > #10}'.format(int(row.mstyp)))         #mstyp
+            f.write('{: <10}'.format(""))           #sboxid
+            f.write('{: <10}'.format(""))           #mboxid
+            f.write('{: <10}'.format(""))           #spr
+            f.write('{: <10}'.format(""))           #mpr
             f.write("\n")
-            f.write('{0: > #50}'.format(20))        #vdc
+            f.write('{: <10}'.format(""))           #fs
+            f.write('{: <10}'.format(""))           #fd
+            f.write('{: <10}'.format(""))           #dc
+            f.write('{: <10}'.format(""))           #vc
+            f.write('{0:0< #10f}'.format(20))        #vdc
+            f.write('{: <10}'.format(""))           #penchk
+            f.write('{: <10}'.format(""))           #bt
+            f.write('{: <10}'.format(""))           #dt
             f.write("\n")
+            f.write('{: <10}'.format(""))           #soft
+            f.write('{: <10}'.format(""))           #sofscl
+            f.write('{: <10}'.format(""))           #lcidab
+            f.write('{: <10}'.format(""))           #maxpar
+            f.write('{: <10}'.format(""))           #sbopt
+            f.write('{: <10}'.format(""))           #depth
             f.write("\n")
 
     for index, row in lsdyna["t_sid"].iterrows():
         if row.type == "segment":
             f.write("*SET_SEGMENT_TITLE\n")
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.sid))
+            f.write('{: <80}'.format(row.title) + "\n")  
+            f.write('{0: > #10}'.format(row.sid))   #sid
+            f.write('{: <10}'.format(""))           #da1
+            f.write('{: <10}'.format(""))           #da2
+            f.write('{: <10}'.format(""))           #da3
+            f.write('{: <10}'.format(""))           #da4
+            f.write('{: <10}'.format(""))           #solver
+            f.write("\n")
             element_id = 0
             for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].iterrows():
-                if element_id != row.element_id:
+                if element_id == 0:
                     element_id = row.element_id
+                elif element_id != row.element_id:
+                    element_id = row.element_id
+                    f.write('{: <10}'.format(""))           #a1
+                    f.write('{: <10}'.format(""))           #a2
+                    f.write('{: <10}'.format(""))           #a3
+                    f.write('{: <10}'.format(""))           #a4
                     f.write("\n")
-                f.write('{0: > #10}'.format(row.nid))
+                f.write('{0: > #10}'.format(int(row.nid)))       #nid
             f.write("\n")
         elif row.type == "node":
             f.write("*SET_NODE_TITLE\n")
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.sid))
+            f.write('{: <80}'.format(row.title) + "\n")  
+            f.write('{0: > #10}'.format(row.sid))   #sid
+            f.write('{: <10}'.format(""))           #da1
+            f.write('{: <10}'.format(""))           #da2
+            f.write('{: <10}'.format(""))           #da3
+            f.write('{: <10}'.format(""))           #da4
+            f.write('{: <10}'.format(""))           #solver
             for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].sort_values("nid").reset_index().iterrows():
                 if index % 8 == 0: 
                     f.write("\n")
-                f.write('{0: > #10}'.format(row.nid))
+                f.write('{0: > #10}'.format(int(row.nid)))
             f.write("\n")
 
     for index, lcid in lsdyna["t_lcid"].iterrows():
@@ -745,7 +812,7 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.dof))
         f.write('{0: > #10}'.format(row.vad))
         f.write('{0: > #10}'.format(row.lcid))
-        f.write("          ")
+        f.write('{: <10}'.format(""))
         f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
 
@@ -757,7 +824,7 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(row.dof))
         f.write('{0: > #10}'.format(row.vad))
         f.write('{0: > #10}'.format(row.lcid))
-        f.write("          ")
+        f.write('{: <10}'.format(""))
         f.write('{0: > #10}'.format(row.vid))
         f.write("\n")
 
