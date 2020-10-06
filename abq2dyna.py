@@ -2,9 +2,13 @@
 import pandas as pd
 import sys
 import os
-input_path = r"C:\temp\abq2dyna.inp"
+import time
 
-output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + "111.key"
+start = time.time()
+
+input_path = r"C:\Users\1080045106\Desktop\abq2dyna2.inp"
+
+output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + ".key"
 
 keyword = ""
 
@@ -225,15 +229,15 @@ for line in lines:
         abaqus["t_material_name"]["hyperelastic"][len(abaqus["t_material_name"]["hyperelastic"]) - 1]     = [float(st) for st in spdata[:6]]
         keyword = ""
     elif keyword == "*Dynamic": 
-        abaqus["t_step_name"]["time"][-1]               =  spdata[1]
+        abaqus["t_step_name"]["time"][-1]                   =  spdata[1]
     elif keyword == "*Boundary": 
-        abaqus["t_boundary_id"]["nset_name"][-1]         =  spdata[0]
-        abaqus["t_boundary_component"]["boundary_id"]     += [boundary_id]
-        abaqus["t_boundary_component"]["freedom"]       += [spdata[1]]
+        abaqus["t_boundary_id"]["nset_name"][-1]            =  spdata[0]
+        abaqus["t_boundary_component"]["boundary_id"]       += [boundary_id]
+        abaqus["t_boundary_component"]["freedom"]           += [spdata[1]]
         if len(spdata) == 4:
-            abaqus["t_boundary_component"]["amount"]    += [float(spdata[3])]
+            abaqus["t_boundary_component"]["amount"]        += [float(spdata[3])]
         else:
-            abaqus["t_boundary_component"]["amount"]    += [0]
+            abaqus["t_boundary_component"]["amount"]        += [0]
     elif keyword == "*Amplitude": 
         for n in range(0, len(spdata), 2):
             abaqus["t_amplitude_component"]["amplitude_name"] += [amplitude_name]
@@ -244,8 +248,7 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
-sys.exit()
-print("inputfile loaded")
+print("inputfile loaded" + str(time.time() - start))
 
 #Convert .k 
 
@@ -297,11 +300,11 @@ for index, row in tmp.iterrows():
         lsdyna["t_mid_ogden"]["mid"]    += [mid]
         lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
         lsdyna["t_mid_ogden"]["pr"]     += [0.499]
-        lsdyna["t_mid_ogden"]["mu1"]    += [mat["hyperelastic"][0]]
+        lsdyna["t_mid_ogden"]["mu1"]    += [2 * mat["hyperelastic"][0] / mat["hyperelastic"][1]] #mu(dyna) = 2 * mu(abqus) / alpha(abaqus)
         lsdyna["t_mid_ogden"]["alpha1"] += [mat["hyperelastic"][1]]
-        lsdyna["t_mid_ogden"]["mu2"]    += [mat["hyperelastic"][2]]
+        lsdyna["t_mid_ogden"]["mu2"]    += [2 * mat["hyperelastic"][2] / mat["hyperelastic"][3]]
         lsdyna["t_mid_ogden"]["alpha2"] += [mat["hyperelastic"][3]]
-        lsdyna["t_mid_ogden"]["mu3"]    += [mat["hyperelastic"][4]]
+        lsdyna["t_mid_ogden"]["mu3"]    += [2 * mat["hyperelastic"][4] / mat["hyperelastic"][5]]
         lsdyna["t_mid_ogden"]["alpha3"] += [mat["hyperelastic"][5]]
         # for index, st in enumerate([col for col in lsdyna["t_mid_ogden"].keys()][3:]):
         #     lsdyna["t_mid_ogden"][st] += [float(mat["hyperelastic"][index - 3])]
@@ -309,7 +312,7 @@ for index, row in tmp.iterrows():
         lsdyna["t_mid"]["type"]           += ["elastic"]
         lsdyna["t_mid_elastic"]["mid"]    += [mid]
         lsdyna["t_mid_elastic"]["ro"]     += [float(mat["density"] /1000000000000)]
-        lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"] /10000000)]
+        lsdyna["t_mid_elastic"]["e"]      += [float(mat["young"] /1000000)]
         lsdyna["t_mid_elastic"]["pr"]     += [float(mat["poason"])]
 del tmp
 
@@ -486,16 +489,15 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
 
                 lsdyna["t_id_node"]["id"]        += [id]
                 lsdyna["t_id_node"]["nid"]       += [node.node_id]
-                if 6 == int(abaqus["t_boundary_component"][abaqus["t_boundary_component"]["boundary_id"] == boundary.boundary_id].groupby("boundary_id").max().iloc[0]["freedom"]):
-                    lsdyna["t_id_node"]["dof"]   += [4]
-                else:
-                    lsdyna["t_id_node"]["dof"]   += [-4]
+                lsdyna["t_id_node"]["dof"]   += [-4]
+                # if ((abaqus["t_boundary_component"]["boundary_id"] == boundary.boundary_id) & (abaqus["t_boundary_component"]["freedom"] == 3)).any():
+                #     lsdyna["t_id_node"]["dof"]   += [-4]
+                # else:
+                #     lsdyna["t_id_node"]["dof"]   += [4]
                 lsdyna["t_id_node"]["vad"]       += [2]
                 lsdyna["t_id_node"]["lcid"]      += [lcid]    
                 lsdyna["t_id_node"]["vid"]       += [vid]
     else:
-        
-        
         if 1 <= int(boundary.freedom) and int(boundary.freedom) <= 3:
             dof = int(boundary.freedom)
         elif 4 <= int(boundary.freedom) and int(boundary.freedom) <= 6:
@@ -556,7 +558,7 @@ for st in lsdyna.keys():
     lsdyna[st] = create_table(lsdyna[st])
 
 
-print("write dyna file")
+print("write dyna file " + str(time.time() - start))
 #write dyna file
 
 with open(output_path, mode='w') as f:
@@ -655,7 +657,7 @@ with open(output_path, mode='w') as f:
             f.write("*MAT_ELASTIC_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.mid))
-            f.write('{0: <10}'.format('{:.3e}'.format(row.ro)))       
+            f.write('{: >10}'.format('{:.3e}'.format(row.ro)))       
             f.write('{0: > #10}'.format(row.e))       
             f.write('{0:0< #10f}'.format(row.pr))        
             f.write('{: <10}'.format(""))           #da
@@ -668,7 +670,7 @@ with open(output_path, mode='w') as f:
             f.write("*MAT_OGDEN_RUBBER_TITLE\n")
             f.write(row.title + "\n")
             f.write('{0: > #10}'.format(row.mid))
-            f.write('{0: <10}'.format('{:.3e}'.format(row.ro)))                  
+            f.write('{: >10}'.format('{:.3e}'.format(row.ro)))                  
             f.write('{0:0< #10f}'.format(row.pr))       
             f.write('{0: > #10}'.format(0))      #n
             f.write('{0: > #10}'.format(3))      #nv
@@ -676,19 +678,23 @@ with open(output_path, mode='w') as f:
             f.write('{0:0< #10f}'.format(0.001)) #nv
             f.write('{0:0< #10f}'.format(0))     #ref
             f.write("\n")
-            f.write('{0:0< #10f}'.format(row.mu1))
-            f.write('{0:0< #10f}'.format(row.mu2))             
-            f.write('{0:0< #10f}'.format(row.mu3))     
+            f.write('{: >10}'.format('{:.3e}'.format(row.mu1))) 
+            f.write('{: >10}'.format('{:.3e}'.format(row.mu2)))            
+            f.write('{: >10}'.format('{:.3e}'.format(row.mu3))) 
             f.write('{0:0< #10f}'.format(0))     #mu4
             f.write('{0:0< #10f}'.format(0))     #mu5             
             f.write('{0:0< #10f}'.format(0))     #mu6   
+            f.write('{0:0< #10f}'.format(0))     #mu7
+            f.write('{0:0< #10f}'.format(0))     #mu8
             f.write("\n")
-            f.write('{0:0< #10f}'.format(row.alpha1))
-            f.write('{0:0< #10f}'.format(row.alpha2))             
-            f.write('{0:0< #10f}'.format(row.alpha3))     
+            f.write('{: >10}'.format('{:.3e}'.format(row.alpha1))) 
+            f.write('{: >10}'.format('{:.3e}'.format(row.alpha2))) 
+            f.write('{: >10}'.format('{:.3e}'.format(row.alpha3))) 
             f.write('{0:0< #10f}'.format(0))     #alpha4
             f.write('{0:0< #10f}'.format(0))     #alpha5             
             f.write('{0:0< #10f}'.format(0))     #alpha6   
+            f.write('{0:0< #10f}'.format(0))     #alpha7 
+            f.write('{0:0< #10f}'.format(0))     #alpha8 
             f.write("\n")
 
     for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
@@ -873,8 +879,7 @@ with open(output_path, mode='w') as f:
 
     f.write("*END\n")
 
-print("end")
-
+print("end " + str(time.time() - start))
 
 
 
