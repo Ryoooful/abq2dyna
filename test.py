@@ -260,17 +260,16 @@ tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', h
 tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
 tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
-
 tmp = tmp[["step_id", "time", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
 tmp = tmp.sort_values(["nset_name", "freedom", "step_id"])
-
 
 for index, boundary in abaqus["t_boundary_id"][["nset_name"]].groupby(["nset_name"], as_index=False).max().iterrows():
     step_time = 0
     for index, step in abaqus["t_step_name"].iterrows():
         step_time += step.time
         aaa = tmp.loc[(tmp["step_id"] == step.step_id) & (tmp["nset_name"] == boundary.nset_name)]
-        print(aaa)
+        if len(aaa.index) == 0:
+            print(aaa)
 
 
 sys.exit()
