@@ -52,8 +52,8 @@ lsdyna = {
     "t_sid":            {"sid":[], "title":[], "type":[]},
     "t_sid_component":  {"sid":[], "element_id":[], "nid":[]},
     "t_id":             {"id":[], "title":[], "type":[]},
-    "t_id_node":        {"id":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
-    "t_id_set_node":    {"id":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
+    "t_id_node":        {"id":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[], "death":[], "birth":[]},
+    "t_id_set_node":    {"id":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[], "death":[], "birth":[]},
     "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]},
     "t_lcid":           {"lcid":[], "title":[]},
     "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]}
@@ -63,7 +63,7 @@ def get_name(name_label, spdata):
     for sp in spdata[1:]:
         if name_label + "=" in sp:
             return str(sp.split("=")[1])
-    return None
+    return ""
 
 def get_bool(label, spdata, yesno):
     for sp in spdata[1:]:
@@ -156,7 +156,7 @@ for line in lines:
             boundary_id = len(abaqus["t_boundary_id"]["boundary_id"]) + 1
             abaqus["t_boundary_id"]["boundary_id"]          += [boundary_id]
             abaqus["t_boundary_id"]["step_name"]            += [step_name]
-            abaqus["t_boundary_id"]["nset_name"]            += [None]
+            abaqus["t_boundary_id"]["nset_name"]            += [""]
             abaqus["t_boundary_id"]["amplitude_name"]       += [get_name("amplitude", spdata)]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
                 abaqus["t_boundary_id"][col] += [0]
@@ -257,19 +257,38 @@ abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_ele
 
 
 tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', how='left')
-tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
+tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
-tmp = tmp[["step_id", "time", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
-tmp = tmp.sort_values(["nset_name", "freedom", "step_id"])
+tmp = tmp[["step_id", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
+abaqus["q_history_component"] = tmp.sort_values(["nset_name", "freedom", "step_id"])
+del tmp
 
-for index, boundary in abaqus["t_boundary_id"][["nset_name"]].groupby(["nset_name"], as_index=False).max().iterrows():
+for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "freedom"], as_index=False).max().reset_index(drop=True).iterrows():
+    tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
+    tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
     step_time = 0
-    for index, step in abaqus["t_step_name"].iterrows():
-        step_time += step.time
-        aaa = tmp.loc[(tmp["step_id"] == step.step_id) & (tmp["nset_name"] == boundary.nset_name)]
-        if len(aaa.index) == 0:
-            print(aaa)
+    for index, step in tmp.iterrows():
+        if step.nset_name == nan:
+            print(step.nset_name)
+    
+
+
+
+#     step_time = 0
+#     tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
+#     tmp = pd.merge(abaqus["t_step_name"], tmp, on='boundary_id', how='left')
+    
+    
+    
+    
+#     tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
+        
+#     for index, step in abaqus["q_history_component"][abaqus["q_history_component"]["nset_name"] == boundary.nset_name].iterrows():
+#         step_time += step.time
+        
+#         if len(aaa.index) == 0:
+#             print(aaa)
 
 
 sys.exit()
