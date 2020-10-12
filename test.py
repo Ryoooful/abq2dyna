@@ -249,66 +249,30 @@ for st in abaqus.keys():
 
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
 abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
-abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
+#abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
 abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
 abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
 
+#tmp = abaqus["t_boundary_id"][["nset_name"]].groupby(["nset_name"], as_index=False).max()
 
-
-endtim = round(abaqus["t_step_name"][["step_id", "time"]].sum()["time"], 3)
-lsdyna["t_lcid"]["lcid"]            += [1]
-lsdyna["t_lcid"]["title"]           += ["default"]
-lsdyna["t_lcid_time"]["lcid"]       += [1]
-lsdyna["t_lcid_time"]["a1"]         += [0]
-lsdyna["t_lcid_time"]["o1"]         += [0]
-lsdyna["t_lcid_time"]["lcid"]       += [1]
-lsdyna["t_lcid_time"]["a1"]         += [endtim]
-lsdyna["t_lcid_time"]["o1"]         += [0]
 
 tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', how='left')
-#tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
-#tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
+tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
+
+tmp = tmp[["step_id", "time", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
+tmp = tmp.sort_values(["nset_name", "freedom", "step_id"])
 
 
-
-#tmp = tmp[["step_id", "time", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
-#tmp = tmp.sort_values(["nset_name", "freedom", "step_id"])
-print(tmp)
-sys.exit()
-
-step_time = 0
-for index, step in abaqus["t_step_name"].iterrows():
-    for index, boundary in abaqus["t_boundary_id"][abaqus["t_boundary_id"]["step_name"] == step.step_name].iterrows():
-        for index, row in abaqus["t_boundary_component"][abaqus["t_boundary_component"]["boundary_id"] == boundary.boundary_id].iterrows():
-
-for index, boundary in pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', how='left').iterrows():
-    if boundary.amplitude_name != None:
-        lcid_name = str(boundary.amplitude_name) + "," + str(boundary.amount)
-        if lcid_name in lsdyna["t_lcid"]["title"]:
-            lcid = lsdyna["t_lcid"]["lcid"][lsdyna["t_lcid"]["title"].index(lcid_name)]
-        else:
-            lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
-            lsdyna["t_lcid"]["lcid"]          += [lcid]
-            lsdyna["t_lcid"]["title"]         += [lcid_name]
-            for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name].iterrows():
-                lsdyna["t_lcid_time"]["lcid"] += [lcid]
-                lsdyna["t_lcid_time"]["a1"]   += [amplitude.time]
-                if boundary.amount == 0:
-                    lsdyna["t_lcid_time"]["o1"]   += [0]
-                else:
-                    lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
-
-
-
-
-
-
-
-
-
-
-
-
+for index, boundary in abaqus["t_boundary_id"][["nset_name"]].groupby(["nset_name"], as_index=False).max().iterrows():
+    step_time = 0
+    for index, step in abaqus["t_step_name"].iterrows():
+        step_time += step.time
+        aaa = tmp.loc[(tmp["step_id"] == step.step_id) & (tmp["nset_name"] == boundary.nset_name)]
+        print(aaa)
 
 
 sys.exit()
+
+
