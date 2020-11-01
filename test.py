@@ -3,10 +3,11 @@ import pandas as pd
 import sys
 import os
 import time
+from decimal import Decimal
 
 start = time.time()
 
-input_path = r"C:\Users\Ryoooful\OneDrive\Desktop\step3.inp"
+input_path = r"C:\temp\abq2dyna.inp"
 output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + ".key"
 
 keyword = ""
@@ -78,6 +79,13 @@ def get_bool(label, spdata, yesno):
 
 def create_table(table):
     return pd.DataFrame(data=table, columns=table.keys())
+
+def create_csv(table, input):
+    path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\"
+    table.to_csv(path + input + ".csv")
+
+
+
 
 #Abaqusファイルのテキストデータをリストに格納する
 with open(input_path) as f:
@@ -205,11 +213,6 @@ for line in lines:
                     abaqus["t_nset_component"]["nset_name"]      += [nset_name]
                     abaqus["t_nset_component"]["node_id"]        += [int(st)]
                 elif st != "":
-                    # tmp = create_table(abaqus["t_nset_component"])
-                    # for index, row in tmp[tmp["nset_name"] == st].reset_index().iterrows():
-                    #     abaqus["t_nset_component"]["nset_name"]  += [nset_name]
-                    #     abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
-                    # del tmp
                     abaqus["t_transform_component"]["transform_name"] += [nset_name]
                     abaqus["t_transform_component"]["nset_name"]      += [st]
     elif keyword == "*Transform": 
@@ -247,50 +250,48 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
+#abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
+#abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
+
+# abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
+# abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
+
+
+
 abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
-abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
-#abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
-abaqus["q_solid_component"] = pd.merge(abaqus["t_solid_id"], abaqus["t_elset_component"], on='elset_name', how='left')
-abaqus["q_part_component"] = pd.merge(abaqus["q_solid_component"], abaqus["t_element_id"], on='element_id', how='left')
-
-#tmp = abaqus["t_boundary_id"][["nset_name"]].groupby(["nset_name"], as_index=False).max()
-
-
 tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
 tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
+
+
 tmp = tmp[["step_id", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
 abaqus["q_history_component"] = tmp.sort_values(["nset_name", "freedom", "step_id"])
-del tmp
+#del tmp
+#create_csv(tmp, "tmp")
+
+
 
 for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "freedom"], as_index=False).max().reset_index(drop=True).iterrows():
     tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
     tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
-    step_time = 0
+    time = Decimal("0") 
+    value = Decimal("0")
+    print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(0) + "\t" + str(0))
     for index, step in tmp.iterrows():
-        if step.nset_name == nan:
-            print(step.nset_name)
+        step_time   =  Decimal("0")
+        step_value  =  Decimal("0")
+        if boundary.amplitude_name == "":
+            step_time = Decimal(str(step.time))
+            step_value = Decimal(str(boundary.amount))
+            print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(step_time) + "\t" + str(step_value))
+        else:
+            amplitude = abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name]
+            for index, row in amplitude.iterrows():
+                if Decimal(str(row.time)) != 0:
+                    step_time  = Decimal(str(step.time))        * Decimal(str(row.time)) / Decimal(str(amplitude.max().time))      
+                    step_value = Decimal(str(boundary.amount))  * Decimal(str(row.step)) / Decimal(str(amplitude.max().step))      
+                    print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(step_time) + "\t" + str(step_value))
+        value = step_value
+        time += Decimal(str(step.time))
     
-
-
-
-#     step_time = 0
-#     tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
-#     tmp = pd.merge(abaqus["t_step_name"], tmp, on='boundary_id', how='left')
-    
-    
-    
-    
-#     tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
-        
-#     for index, step in abaqus["q_history_component"][abaqus["q_history_component"]["nset_name"] == boundary.nset_name].iterrows():
-#         step_time += step.time
-        
-#         if len(aaa.index) == 0:
-#             print(aaa)
-
-
-sys.exit()
-
-
