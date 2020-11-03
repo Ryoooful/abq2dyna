@@ -7,7 +7,7 @@ from decimal import Decimal
 
 start = time.time()
 
-input_path = r"C:\temp\abq2dyna.inp"
+input_path = r"C:\Users\Ryoooful\Desktop\abq2dyna2.inp"
 output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + ".key"
 
 keyword = ""
@@ -263,13 +263,9 @@ tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', h
 tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
 tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
 tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
-
-
 tmp = tmp[["step_id", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
 abaqus["q_history_component"] = tmp.sort_values(["nset_name", "freedom", "step_id"])
-#del tmp
-#create_csv(tmp, "tmp")
-
+del tmp
 
 
 for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "freedom"], as_index=False).max().reset_index(drop=True).iterrows():
@@ -277,21 +273,33 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
     tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
     time = Decimal("0") 
     value = Decimal("0")
-    print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(0) + "\t" + str(0))
+    birth = None
+    print(str(boundary.nset_name) + "/" + str(boundary.freedom) + "\tq\t" + str(0) + "\t" + str(0))
     for index, step in tmp.iterrows():
-        step_time   =  Decimal("0")
-        step_value  =  Decimal("0")
-        if boundary.amplitude_name == "":
-            step_time = Decimal(str(step.time))
-            step_value = Decimal(str(boundary.amount))
-            print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(step_time) + "\t" + str(step_value))
+        step_time   =  Decimal(str(step.time))
+        step_amount =  Decimal(str(step.amount))
+        if not step.isnull().nset_name:
+            if birth == None:
+                birth = time
+
+            if birth != None:
+                #OP=NEWはここで処理する
+                if step.amplitude_name == "":
+                    time  += (step_time - birth)
+                    value = step_amount
+                    print(str(boundary.nset_name) + "/" + str(boundary.freedom) + "\ta\t" + str(time) + "\t" + str(value))
+                else:
+                    amplitude = abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == step.amplitude_name]
+                    for index, row in amplitude.iterrows():
+                        if Decimal(str(row.time)) != 0:
+                            tmp_time  = time + (step_time   * Decimal(str(row.time)) / (Decimal(str(amplitude.max().time)) - Decimal(str(amplitude.min().time)))) 
+                            value     = step_amount * Decimal(str(row.step))
+                            print(str(boundary.nset_name) + "/" + str(boundary.freedom) + "\tb\t" + str(tmp_time) + "\t" + str(value))
+                    time  += (step_time - birth)
         else:
-            amplitude = abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name]
-            for index, row in amplitude.iterrows():
-                if Decimal(str(row.time)) != 0:
-                    step_time  = Decimal(str(step.time))        * Decimal(str(row.time)) / Decimal(str(amplitude.max().time))      
-                    step_value = Decimal(str(boundary.amount))  * Decimal(str(row.step)) / Decimal(str(amplitude.max().step))      
-                    print(boundary.nset_name + "\t" + str(boundary.freedom) + "\t" + str(step_time) + "\t" + str(step_value))
-        value = step_value
-        time += Decimal(str(step.time))
-    
+            if birth != None:
+                time += (step_time - birth)
+                print(str(boundary.nset_name) + "/" + str(boundary.freedom) + "\tc\t" + str(time) + "\t" + str(value))
+            else:
+                time += step_time
+                
