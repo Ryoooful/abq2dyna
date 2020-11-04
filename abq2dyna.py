@@ -4,10 +4,10 @@ import sys
 import os
 import time
 
+
 start = time.time()
 
-input_path = r"C:\Users\1080045106\Desktop\abq2dyna2.inp"
-
+input_path = r"C:\Users\Ryoooful\Desktop\abq2dyna2.inp"
 output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + ".key"
 
 keyword = ""
@@ -27,11 +27,11 @@ abaqus = {
     "t_surface_component":  {"surface_name":[], "elset_name":[], "identification":[]},
     "t_constraint_name":    {"constraint_id":[], "constraint_name":[], "nset_name":[], "surface_name":[]},
     "t_material_name":      {"material_id":[], "material_name":[], "hyperelastic":[], "conductivity":[], "density":[], "young":[], "poason":[], "specific_heat":[]},
-    "t_transform_name":     {"transform_name":[], "transform_id":[], "type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
+    "t_transform_name":     {"transform_name":[], "transform_id":[], "transform_type":[], "x1":[], "y1":[], "z1":[], "x2":[], "y2":[], "z2":[]},
     "t_transform_component":{"transform_name":[], "nset_name":[]},
-    "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "time":[]},
+    "t_amplitude_name":     {"amplitude_name":[], "amplitude_id":[], "amplitude_type":[]},
     "t_amplitude_component":{"amplitude_name":[], "time":[], "step":[]},
-    "t_mass_scaling":       {"dt":[], "type":[], "frequency":[]}, 
+    "t_mass_scaling":       {"dt":[], "mass_type":[], "frequency":[]}, 
     "t_step_name":          {"step_name":[], "step_id":[], "time":[]}, 
     "t_boundary_id":        {"boundary_id":[], "step_name":[], "nset_name":[], "amplitude_name":[]},
     "t_boundary_component": {"boundary_id":[], "freedom":[], "amount":[]}
@@ -53,8 +53,8 @@ lsdyna = {
     "t_sid":            {"sid":[], "title":[], "type":[]},
     "t_sid_component":  {"sid":[], "element_id":[], "nid":[]},
     "t_id":             {"id":[], "title":[], "type":[]},
-    "t_id_node":        {"id":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
-    "t_id_set_node":    {"id":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[]},
+    "t_id_node":        {"id":[], "nid":[], "dof":[], "vad":[], "lcid":[], "vid":[], "death":[], "birth":[]},
+    "t_id_set_node":    {"id":[], "sid":[], "dof":[], "vad":[], "lcid":[], "vid":[], "death":[], "birth":[]},
     "t_vid":            {"vid":[], "xt":[], "yt":[], "zt":[], "xh":[], "yh":[], "zh":[]},
     "t_lcid":           {"lcid":[], "title":[]},
     "t_lcid_time":      {"lcid":[], "a1":[], "o1":[]}
@@ -64,7 +64,7 @@ def get_name(name_label, spdata):
     for sp in spdata[1:]:
         if name_label + "=" in sp:
             return str(sp.split("=")[1])
-    return None
+    return ""
 
 def get_bool(label, spdata, yesno):
     for sp in spdata[1:]:
@@ -79,6 +79,13 @@ def get_bool(label, spdata, yesno):
 
 def create_table(table):
     return pd.DataFrame(data=table, columns=table.keys())
+
+def create_csv(table, input):
+    path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\"
+    table.to_csv(path + input + ".csv")
+
+
+
 
 #Abaqusファイルのテキストデータをリストに格納する
 with open(input_path) as f:
@@ -134,9 +141,9 @@ for line in lines:
             abaqus["t_surface_name"]["surface_name"]        += [surface_name]
             abaqus["t_surface_name"]["surface_type"]        += [get_name("type", spdata)]
         elif "*Transform" == keyword:
-            abaqus["t_transform_name"]["transform_name"]         += [get_name("nset", spdata)]
+            abaqus["t_transform_name"]["transform_name"]    += [get_name("nset", spdata)]
             abaqus["t_transform_name"]["transform_id"]      += [len(abaqus["t_transform_name"]["transform_id"])]
-            abaqus["t_transform_name"]["type"]              += [get_name("type", spdata)]
+            abaqus["t_transform_name"]["transform_type"]    += [get_name("type", spdata)]
         elif "*Material" == keyword:
             material_name = get_name("name", spdata)
             abaqus["t_material_name"]["material_id"]        += [len(abaqus["t_material_name"]["material_id"]) + 1]
@@ -151,13 +158,13 @@ for line in lines:
             abaqus["t_step_name"]["time"]                   += [0]
         elif "*Variable Mass Scaling" == keyword: 
             abaqus["t_mass_scaling"]["dt"]                  += [get_name("dt", spdata)]
-            abaqus["t_mass_scaling"]["type"]                += [get_name("type", spdata)]
+            abaqus["t_mass_scaling"]["mass_type"]           += [get_name("type", spdata)]
             abaqus["t_mass_scaling"]["frequency"]           += [get_name("frequency", spdata)]
         elif "*Boundary" == keyword:
             boundary_id = len(abaqus["t_boundary_id"]["boundary_id"]) + 1
             abaqus["t_boundary_id"]["boundary_id"]          += [boundary_id]
             abaqus["t_boundary_id"]["step_name"]            += [step_name]
-            abaqus["t_boundary_id"]["nset_name"]            += [None]
+            abaqus["t_boundary_id"]["nset_name"]            += [""]
             abaqus["t_boundary_id"]["amplitude_name"]       += [get_name("amplitude", spdata)]
             for col in [st for st in abaqus["t_boundary_id"].keys()][4:]:
                 abaqus["t_boundary_id"][col] += [0]
@@ -165,7 +172,7 @@ for line in lines:
             amplitude_name = get_name("name", spdata)
             abaqus["t_amplitude_name"]["amplitude_id"]                += [len(abaqus["t_amplitude_name"]["amplitude_id"]) + 1]
             abaqus["t_amplitude_name"]["amplitude_name"]              += [amplitude_name]
-            abaqus["t_amplitude_name"]["time"]                        += [get_name("time", spdata)]
+            abaqus["t_amplitude_name"]["amplitude_type"]              += [get_name("time", spdata)]
         elif "*End Step" == keyword: 
             step_name = ""
         continue
@@ -206,11 +213,6 @@ for line in lines:
                     abaqus["t_nset_component"]["nset_name"]      += [nset_name]
                     abaqus["t_nset_component"]["node_id"]        += [int(st)]
                 elif st != "":
-                    # tmp = create_table(abaqus["t_nset_component"])
-                    # for index, row in tmp[tmp["nset_name"] == st].reset_index().iterrows():
-                    #     abaqus["t_nset_component"]["nset_name"]  += [nset_name]
-                    #     abaqus["t_nset_component"]["node_id"]    += [int(row.node_id)]
-                    # del tmp
                     abaqus["t_transform_component"]["transform_name"] += [nset_name]
                     abaqus["t_transform_component"]["nset_name"]      += [st]
     elif keyword == "*Transform": 
@@ -229,7 +231,7 @@ for line in lines:
         abaqus["t_material_name"]["hyperelastic"][len(abaqus["t_material_name"]["hyperelastic"]) - 1]     = [float(st) for st in spdata[:6]]
         keyword = ""
     elif keyword == "*Dynamic": 
-        abaqus["t_step_name"]["time"][-1]                   =  spdata[1]
+        abaqus["t_step_name"]["time"][-1]                   =  float(spdata[1])
     elif keyword == "*Boundary": 
         abaqus["t_boundary_id"]["nset_name"][-1]            =  spdata[0]
         abaqus["t_boundary_component"]["boundary_id"]       += [boundary_id]
@@ -248,7 +250,7 @@ for line in lines:
 for st in abaqus.keys():
     abaqus[st] = create_table(abaqus[st])
 
-print("inputfile loaded" + str(time.time() - start))
+print("inputfile loaded\t" + str(time.time() - start))
 
 #Convert .k 
 
@@ -415,9 +417,9 @@ for tie, row in abaqus["t_tie_name"].iterrows():
     lsdyna["t_cid_surface"]["mstyp"]        += [0]
     create_set_node_from_surface(sid_master, "segment", row.master_surface)
 
-abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
+#abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
 abaqus["t_nset_component"] = pd.merge(abaqus["t_nset_component"], abaqus["t_node_id"], on='node_id', how='left')
-abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
+#abaqus["t_boundary_id"] = pd.merge(abaqus["t_boundary_id"], abaqus["t_transform_component"], on='nset_name', how='left')
 
 #剛体を作成する
 for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component"], on='nset_name', how='left').iterrows():
@@ -439,38 +441,81 @@ for index, row in pd.merge(abaqus["t_constraint_name"], abaqus["t_nset_component
     lsdyna["t_pid_rigid"]["pnode"]             += [row.node_id]
 
 
-endtim = abaqus["t_amplitude_component"].max()["time"]
-lsdyna["t_lcid"]["lcid"]            += [1]
-lsdyna["t_lcid"]["title"]           += ["default"]
-lsdyna["t_lcid_time"]["lcid"]       += [1]
-lsdyna["t_lcid_time"]["a1"]         += [0]
-lsdyna["t_lcid_time"]["o1"]         += [0]
-lsdyna["t_lcid_time"]["lcid"]       += [1]
-lsdyna["t_lcid_time"]["a1"]         += [endtim]
-lsdyna["t_lcid_time"]["o1"]         += [0]
+# endtim = abaqus["t_amplitude_component"].max()["time"]
+# lsdyna["t_lcid"]["lcid"]            += [1]
+# lsdyna["t_lcid"]["title"]           += ["default"]
+# lsdyna["t_lcid_time"]["lcid"]       += [1]
+# lsdyna["t_lcid_time"]["a1"]         += [0]
+# lsdyna["t_lcid_time"]["o1"]         += [0]
+# lsdyna["t_lcid_time"]["lcid"]       += [1]
+# lsdyna["t_lcid_time"]["a1"]         += [endtim]
+# lsdyna["t_lcid_time"]["o1"]         += [0]
 
 
-for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_component"], on='boundary_id', how='left').iterrows():
-    lcid = 1
-    if boundary.amplitude_name != None:
-        lcid_name = str(boundary.amplitude_name) + "," + str(boundary.amount)
-        if lcid_name in lsdyna["t_lcid"]["title"]:
-            lcid = lsdyna["t_lcid"]["lcid"][lsdyna["t_lcid"]["title"].index(lcid_name)]
-        else:
-            lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
-            lsdyna["t_lcid"]["lcid"]          += [lcid]
-            lsdyna["t_lcid"]["title"]         += [lcid_name]
-            for index, amplitude in abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == boundary.amplitude_name].iterrows():
-                lsdyna["t_lcid_time"]["lcid"] += [lcid]
-                lsdyna["t_lcid_time"]["a1"]   += [amplitude.time]
-                if boundary.amount == 0:
-                    lsdyna["t_lcid_time"]["o1"]   += [0]
+
+
+
+
+abaqus["t_transform_component"] = pd.merge(abaqus["t_transform_name"], abaqus["t_transform_component"], on='transform_name', how='left')
+tmp = pd.merge(abaqus["t_step_name"], abaqus["t_boundary_id"], on='step_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_boundary_component"], on='boundary_id', how='left')
+tmp = pd.merge(tmp, abaqus["t_transform_component"], on='nset_name', how='left')
+tmp = pd.merge(tmp, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
+
+tmp = tmp[["step_id", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
+abaqus["q_history_component"] = tmp.sort_values(["nset_name", "freedom", "step_id"])
+del tmp
+
+
+for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "freedom"], as_index=False).max().reset_index(drop=True).iterrows():
+    tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
+    tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
+    time = 0
+    value = 0
+    death = None
+
+    lcid = len(lsdyna["t_lcid"]["lcid"]) + 1
+    lsdyna["t_lcid"]["lcid"]      += [lcid]
+    lsdyna["t_lcid"]["title"]     += [str(boundary.nset_name) + "," + str(boundary.freedom)]
+    lsdyna["t_lcid_time"]["lcid"] += [lcid]
+    lsdyna["t_lcid_time"]["a1"]   += [0]
+    lsdyna["t_lcid_time"]["o1"]   += [0]
+    for index, step in tmp.iterrows():
+        step_time   =  step.time
+        step_amount =  step.amount
+        if not step.isnull().nset_name:
+            if death == None:
+                death = time
+
+            if death != None:
+                #OP=NEWはここで処理する
+                if step.amplitude_name == "":
+                    time  += (step_time - death)
+                    value = step_amount
+                    lsdyna["t_lcid_time"]["lcid"] += [lcid]
+                    lsdyna["t_lcid_time"]["a1"]   += [time]
+                    lsdyna["t_lcid_time"]["o1"]   += [value]
                 else:
-                    lsdyna["t_lcid_time"]["o1"]   += [amplitude.step]
-            
-    nset = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name]
-    #円筒座標系の場合
-    if boundary.type == "C":
+                    amplitude = abaqus["t_amplitude_component"][abaqus["t_amplitude_component"]["amplitude_name"] == step.amplitude_name]
+                    for index, row in amplitude.iterrows():
+                        if row.time != 0:
+                            tmp_time  = time + (step_time   * row.time / (amplitude.max().time - amplitude.min().time)) 
+                            value     = step_amount * row.step
+                            lsdyna["t_lcid_time"]["lcid"] += [lcid]
+                            lsdyna["t_lcid_time"]["a1"]   += [tmp_time]
+                            lsdyna["t_lcid_time"]["o1"]   += [value]
+                    time  += (step_time - death)
+        else:
+            if death != None:
+                time += (step_time - death)
+                lsdyna["t_lcid_time"]["lcid"] += [lcid]
+                lsdyna["t_lcid_time"]["a1"]   += [time]
+                lsdyna["t_lcid_time"]["o1"]   += [value]
+            else:
+                time += step_time
+
+    nset = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name]            
+    if boundary.transform_type == "C":
         if not boundary.nset_name in lsdyna["t_id"]["title"]:
             for index, node in nset.iterrows():
                 vid = len(lsdyna["t_vid"]["vid"]) + 1
@@ -497,6 +542,8 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
                 lsdyna["t_id_node"]["vad"]       += [2]
                 lsdyna["t_id_node"]["lcid"]      += [lcid]    
                 lsdyna["t_id_node"]["vid"]       += [vid]
+                lsdyna["t_id_node"]["death"]               += [death] 
+                lsdyna["t_id_node"]["birth"]               += [0] 
     else:
         if 1 <= int(boundary.freedom) and int(boundary.freedom) <= 3:
             dof = int(boundary.freedom)
@@ -518,6 +565,8 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
             lsdyna["t_id_node"]["vad"]                 += [2]
             lsdyna["t_id_node"]["vid"]                 += [0]
             lsdyna["t_id_node"]["lcid"]                += [lcid] 
+            lsdyna["t_id_node"]["death"]               += [death] 
+            lsdyna["t_id_node"]["birth"]               += [0] 
         else:
             id = len(lsdyna["t_id"]["id"]) + 1
             lsdyna["t_id"]["id"]                           += [id]
@@ -542,8 +591,9 @@ for index, boundary in pd.merge(abaqus["t_boundary_id"], abaqus["t_boundary_comp
             lsdyna["t_id_set_node"]["dof"]                 += [dof]
             lsdyna["t_id_set_node"]["vad"]                 += [2]
             lsdyna["t_id_set_node"]["vid"]                 += [0]
-            lsdyna["t_id_set_node"]["lcid"]                += [lcid] 
-            
+            lsdyna["t_id_set_node"]["lcid"]                += [lcid]
+            lsdyna["t_id_set_node"]["death"]               += [death] 
+            lsdyna["t_id_set_node"]["birth"]               += [0] 
 
 for nid, row in abaqus["t_node_id"].iterrows():
     lsdyna["t_nid"]["nid"]  += [row.node_id]
@@ -553,12 +603,15 @@ for nid, row in abaqus["t_node_id"].iterrows():
     lsdyna["t_nid"]["tc"]   += [0]
     lsdyna["t_nid"]["rc"]   += [0]
 
+print(len(lsdyna["t_lcid_time"]["lcid"]))
+print(len(lsdyna["t_lcid_time"]["a1"]))
+print(len(lsdyna["t_lcid_time"]["o1"]))
 
 for st in lsdyna.keys():    
     lsdyna[st] = create_table(lsdyna[st])
 
 
-print("write dyna file " + str(time.time() - start))
+print("write dyna file")
 #write dyna file
 
 with open(output_path, mode='w') as f:
@@ -617,7 +670,7 @@ with open(output_path, mode='w') as f:
     f.write("\n")
 
     f.write("*CONTROL_TERMINATION\n")
-    f.write('{0: > #10}'.format(endtim)) #endtim
+    f.write('{0: > #10}'.format(abaqus["t_amplitude_component"].max()["time"])) #endtim
     f.write("\n")
 
 
@@ -879,7 +932,7 @@ with open(output_path, mode='w') as f:
 
     f.write("*END\n")
 
-print("end " + str(time.time() - start))
+print("end ")
 
 
 
