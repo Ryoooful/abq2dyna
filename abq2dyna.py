@@ -218,7 +218,7 @@ for line in lines:
                     abaqus["t_transform_component"]["nset_name"]      += [st]
     elif keyword == "*Transform": 
         for index, st in enumerate([col for col in abaqus["t_transform_name"].keys()][3:]):
-            abaqus["t_transform_name"][st] += [float(spdata[index - 2])]
+            abaqus["t_transform_name"][st] += [float(spdata[index])]
     elif keyword == "*Conductivity": 
         abaqus["t_material_name"]["conductivity"][len(abaqus["t_material_name"]["conductivity"]) - 1]     = float(spdata[0])
     elif keyword == "*Density": 
@@ -455,7 +455,6 @@ df = pd.merge(df, abaqus["t_amplitude_name"], on='amplitude_name', how='left')
 df = df[["step_id", "nset_name", "amplitude_name", "amplitude_type", "freedom", "amount", "transform_type"]]
 abaqus["q_history_component"] = df.sort_values(["nset_name", "freedom", "step_id"])
 
-
 for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "freedom"], as_index=False).max().reset_index(drop=True).iterrows():
     tmp = abaqus["q_history_component"].loc[(abaqus["q_history_component"]["freedom"] == boundary.freedom) & (abaqus["q_history_component"]["nset_name"] == boundary.nset_name)]
     tmp = pd.merge(abaqus["t_step_name"], tmp, on='step_id', how='left')
@@ -515,6 +514,7 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
     nset = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name]            
     if boundary.transform_type == "C":
         if not boundary.nset_name in lsdyna["t_id"]["title"]:
+            dof = ((abaqus["q_history_component"]["nset_name"] == boundary.nset_name) & (abaqus["q_history_component"]["freedom"] == "3")).any()
             for index, node in nset.iterrows():
                 vid = len(lsdyna["t_vid"]["vid"]) + 1
                 lsdyna["t_vid"]["vid"]            += [vid]
@@ -532,11 +532,12 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
 
                 lsdyna["t_id_node"]["id"]        += [id]
                 lsdyna["t_id_node"]["nid"]       += [node.node_id]
-                lsdyna["t_id_node"]["dof"]   += [-4]
-                # if ((abaqus["t_boundary_component"]["boundary_id"] == boundary.boundary_id) & (abaqus["t_boundary_component"]["freedom"] == 3)).any():
-                #     lsdyna["t_id_node"]["dof"]   += [-4]
-                # else:
-                #     lsdyna["t_id_node"]["dof"]   += [4]
+
+                if dof:
+                    lsdyna["t_id_node"]["dof"]   += [-4]
+                else:
+                    lsdyna["t_id_node"]["dof"]   += [4]
+
                 lsdyna["t_id_node"]["vad"]       += [2]
                 lsdyna["t_id_node"]["lcid"]      += [lcid]    
                 lsdyna["t_id_node"]["vid"]       += [vid]
@@ -702,44 +703,48 @@ with open(output_path, mode='w') as f:
             f.write('{: <10}'.format(""))                       #rrflag
             f.write("\n")
     
-    for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left').iterrows():
-        if row.type == "elastic":
+    df = pd.merge(lsdyna["t_mid"], lsdyna["t_mid_elastic"], on='mid', how='left')
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
+        if tmp["type"][idx] == "elastic":
             f.write("*MAT_ELASTIC_TITLE\n")
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.mid))
-            f.write('{: >10}'.format('{:.3e}'.format(row.ro)))       
-            f.write('{0: > #10}'.format(row.e))       
-            f.write('{0:0< #10f}'.format(row.pr))        
+            f.write(tmp["title"][idx] + "\n")
+            f.write('{0: > #10}'.format(tmp["mid"][idx]))
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["ro"][idx])))       
+            f.write('{0: > #10}'.format(tmp["e"][idx]))       
+            f.write('{0:0< #10f}'.format(tmp["pr"][idx]))        
             f.write('{: <10}'.format(""))           #da
             f.write('{: <10}'.format(""))           #db
             f.write('{: <10}'.format(""))           #k
             f.write("\n")
     
-    for index, row in pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left').iterrows():
-        if row.type == "ogden":
+    df = pd.merge(lsdyna["t_mid"], lsdyna["t_mid_ogden"], on='mid', how='left')
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
+        if tmp["type"][idx] == "ogden":
             f.write("*MAT_OGDEN_RUBBER_TITLE\n")
-            f.write(row.title + "\n")
-            f.write('{0: > #10}'.format(row.mid))
-            f.write('{: >10}'.format('{:.3e}'.format(row.ro)))                  
-            f.write('{0:0< #10f}'.format(row.pr))       
+            f.write(tmp["title"][idx] + "\n")
+            f.write('{0: > #10}'.format(tmp["mid"][idx]))
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["ro"][idx])))                  
+            f.write('{0:0< #10f}'.format(tmp["pr"][idx]))       
             f.write('{0: > #10}'.format(0))      #n
             f.write('{0: > #10}'.format(3))      #nv
             f.write('{0:0< #10f}'.format(1))     #g
             f.write('{0:0< #10f}'.format(0.001)) #nv
             f.write('{0:0< #10f}'.format(0))     #ref
             f.write("\n")
-            f.write('{: >10}'.format('{:.3e}'.format(row.mu1))) 
-            f.write('{: >10}'.format('{:.3e}'.format(row.mu2)))            
-            f.write('{: >10}'.format('{:.3e}'.format(row.mu3))) 
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["mu1"][idx]))) 
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["mu2"][idx])))            
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["mu3"][idx]))) 
             f.write('{0:0< #10f}'.format(0))     #mu4
             f.write('{0:0< #10f}'.format(0))     #mu5             
             f.write('{0:0< #10f}'.format(0))     #mu6   
             f.write('{0:0< #10f}'.format(0))     #mu7
             f.write('{0:0< #10f}'.format(0))     #mu8
             f.write("\n")
-            f.write('{: >10}'.format('{:.3e}'.format(row.alpha1))) 
-            f.write('{: >10}'.format('{:.3e}'.format(row.alpha2))) 
-            f.write('{: >10}'.format('{:.3e}'.format(row.alpha3))) 
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["alpha1"][idx]))) 
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["alpha2"][idx]))) 
+            f.write('{: >10}'.format('{:.3e}'.format(tmp["alpha3"][idx]))) 
             f.write('{0:0< #10f}'.format(0))     #alpha4
             f.write('{0:0< #10f}'.format(0))     #alpha5             
             f.write('{0:0< #10f}'.format(0))     #alpha6   
@@ -747,24 +752,28 @@ with open(output_path, mode='w') as f:
             f.write('{0:0< #10f}'.format(0))     #alpha8 
             f.write("\n")
 
-    for index, lcid in lsdyna["t_lcid"].iterrows():
+    df = lsdyna["t_lcid"]
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
         f.write("*DEFINE_CURVE_TITLE\n")
-        f.write(lcid.title + "\n")
-        f.write('{0: > #10}'.format(lcid.lcid))
+        f.write(tmp["title"][idx] + "\n")
+        f.write('{0: > #10}'.format(tmp["lcid"][idx]))
         f.write("\n")
-        for index, row in lsdyna["t_lcid_time"][lsdyna["t_lcid_time"]['lcid'] == lcid.lcid].iterrows():
+        for index, row in lsdyna["t_lcid_time"][lsdyna["t_lcid_time"]['lcid'] == tmp["lcid"][idx]].iterrows():
             f.write('{0: > #20}'.format(row.a1))
             f.write('{0: > #20}'.format(row.o1))
             f.write("\n")
 
-    for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left').iterrows():
-        if row.type == "exterior":
+    df = pd.merge(lsdyna["t_cid"], lsdyna["t_cid_exterior"], on='cid', how='left')
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
+        if tmp["type"][idx] == "exterior":
             f.write("*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID\n")
-            f.write('{0: > #10}'.format(row.cid))
-            f.write('{: <70}'.format(row.title) + "\n")  
-            f.write('{0: > #10}'.format(int(row.ssid)))
+            f.write('{0: > #10}'.format(tmp["cid"][idx]))
+            f.write('{: <70}'.format(tmp["title"][idx]) + "\n")  
+            f.write('{0: > #10}'.format(int(tmp["ssid"][idx])))
             f.write('{0: > #10}'.format(0))         #msid
-            f.write('{0: > #10}'.format(int(row.sstyp))) #sstyp
+            f.write('{0: > #10}'.format(int(tmp["sstyp"][idx]))) #sstyp
             f.write('{0: > #10}'.format(0))         #mstyp
             f.write('{: <10}'.format(""))           #sboxid
             f.write('{: <10}'.format(""))           #mboxid
@@ -797,15 +806,17 @@ with open(output_path, mode='w') as f:
             f.write('{0: > #10}'.format(5))         #depth
             f.write("\n")
     
-    for index, row in pd.merge(lsdyna["t_cid"], lsdyna["t_cid_surface"], on='cid', how='left').iterrows():
-        if row.type == "surface":
+    df = pd.merge(lsdyna["t_cid"], lsdyna["t_cid_surface"], on='cid', how='left')
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
+        if tmp["type"][idx] == "surface":
             f.write("*CONTACT_TIED_SURFACE_TO_SURFACE_ID\n")
-            f.write('{0: > #10}'.format(row.cid))
-            f.write('{: <70}'.format(row.title) + "\n")  
-            f.write('{0: > #10}'.format(int(row.ssid)))  #ssid
-            f.write('{0: > #10}'.format(int(row.msid)))        #msid
-            f.write('{0: > #10}'.format(int(row.sstyp))) #sstyp
-            f.write('{0: > #10}'.format(int(row.mstyp)))         #mstyp
+            f.write('{0: > #10}'.format(tmp["cid"][idx]))
+            f.write('{: <70}'.format(tmp["title"][idx]) + "\n")  
+            f.write('{0: > #10}'.format(int(tmp["ssid"][idx])))  #ssid
+            f.write('{0: > #10}'.format(int(tmp["msid"][idx])))        #msid
+            f.write('{0: > #10}'.format(int(tmp["sstyp"][idx]))) #sstyp
+            f.write('{0: > #10}'.format(int(tmp["mstyp"][idx])))         #mstyp
             f.write('{: <10}'.format(""))           #sboxid
             f.write('{: <10}'.format(""))           #mboxid
             f.write('{: <10}'.format(""))           #spr
@@ -828,12 +839,13 @@ with open(output_path, mode='w') as f:
             f.write('{: <10}'.format(""))           #depth
             f.write("\n")
 
-    
-    for index, row in lsdyna["t_sid"].iterrows():
-        if row.type == "segment":
+    df = lsdyna["t_sid"]
+    tmp = set_default(df)
+    for idx in range(df.shape[0]):
+        if tmp["type"][idx] == "segment":
             f.write("*SET_SEGMENT_TITLE\n")
-            f.write('{: <80}'.format(row.title) + "\n")  
-            f.write('{0: > #10}'.format(row.sid))   #sid
+            f.write('{: <80}'.format(tmp["title"][idx]) + "\n")  
+            f.write('{0: > #10}'.format(tmp["sid"][idx]))   #sid
             f.write('{: <10}'.format(""))           #da1
             f.write('{: <10}'.format(""))           #da2
             f.write('{: <10}'.format(""))           #da3
@@ -841,33 +853,37 @@ with open(output_path, mode='w') as f:
             f.write('{: <10}'.format(""))           #solver
             f.write("\n")
             element_id = 0
-            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].iterrows():
+
+            sid_df = lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == tmp["sid"][idx]]
+            sid = set_default(sid_df)
+            for index in range(sid_df.shape[0]):
                 if element_id == 0:
-                    element_id = row.element_id
-                elif element_id != row.element_id:
-                    element_id = row.element_id
+                    element_id = sid["element_id"][index]
+                elif element_id != sid["element_id"][index]:
+                    element_id = sid["element_id"][index]
                     f.write('{: <10}'.format(""))           #a1
                     f.write('{: <10}'.format(""))           #a2
                     f.write('{: <10}'.format(""))           #a3
                     f.write('{: <10}'.format(""))           #a4
                     f.write("\n")
-                f.write('{0: > #10}'.format(int(row.nid)))       #nid
+                f.write('{0: > #10}'.format(int(sid["nid"][index])))       #nid
             f.write("\n")
-        elif row.type == "node":
+        elif tmp["type"][idx] == "node":
             f.write("*SET_NODE_TITLE\n")
-            f.write('{: <80}'.format(row.title) + "\n")  
-            f.write('{0: > #10}'.format(row.sid))   #sid
+            f.write('{: <80}'.format(tmp["title"][idx]) + "\n")  
+            f.write('{0: > #10}'.format(tmp["sid"][idx]))   #sid
             f.write('{: <10}'.format(""))           #da1
             f.write('{: <10}'.format(""))           #da2
             f.write('{: <10}'.format(""))           #da3
             f.write('{: <10}'.format(""))           #da4
             f.write('{: <10}'.format(""))           #solver
-            for index, row in lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == row.sid].sort_values("nid").reset_index().iterrows():
+            sid_df = lsdyna["t_sid_component"][lsdyna["t_sid_component"]['sid'] == tmp["sid"][idx]].sort_values("nid").reset_index()
+            sid = set_default(sid_df)
+            for index in range(sid_df.shape[0]):
                 if index % 8 == 0: 
                     f.write("\n")
-                f.write('{0: > #10}'.format(int(row.nid)))
+                f.write('{0: > #10}'.format(int(sid["nid"][index])))
             f.write("\n")
-
     
     df = pd.merge(lsdyna["t_id_set_node"], lsdyna["t_id"], on='id', how='left')
     tmp = set_default(df)
@@ -938,7 +954,4 @@ with open(output_path, mode='w') as f:
 
     f.write("*END\n")
 
-print("End\t" + str(time.time() - start))
-
-
-
+print("End\t\t" + str(time.time() - start))
