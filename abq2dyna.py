@@ -7,7 +7,7 @@ import numpy
 
 start = time.time()
 
-input_path = r"C:\Users\Ryoooful\Desktop\abq2dyna2.inp"
+input_path = r"C:\Temp\abq2dyna.inp"
 output_path = str(os.environ["HOMEDRIVE"]) + str(os.environ["HOMEPATH"]) + "\\Desktop\\" + os.path.splitext(os.path.basename(input_path))[0] + ".key"
 
 keyword = ""
@@ -301,13 +301,13 @@ for idx in range(df.shape[0]):
     if len(mat["hyperelastic"]) > 1:
         lsdyna["t_mid"]["type"]         += ["ogden"]
         lsdyna["t_mid_ogden"]["mid"]    += [mid]
-        lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"])]
+        lsdyna["t_mid_ogden"]["ro"]     += [float(mat["density"]) /1000000000000]
         lsdyna["t_mid_ogden"]["pr"]     += [0.499]
-        lsdyna["t_mid_ogden"]["mu1"]    += [2 * mat["hyperelastic"][0] / mat["hyperelastic"][1]] #mu(dyna) = 2 * mu(abqus) / alpha(abaqus)
+        lsdyna["t_mid_ogden"]["mu1"]    += [2 * mat["hyperelastic"][0] / mat["hyperelastic"][1] / 1000000] #mu(dyna) = 2 * mu(abqus) / alpha(abaqus)
         lsdyna["t_mid_ogden"]["alpha1"] += [mat["hyperelastic"][1]]
-        lsdyna["t_mid_ogden"]["mu2"]    += [2 * mat["hyperelastic"][2] / mat["hyperelastic"][3]]
+        lsdyna["t_mid_ogden"]["mu2"]    += [2 * mat["hyperelastic"][2] / mat["hyperelastic"][3] / 1000000]
         lsdyna["t_mid_ogden"]["alpha2"] += [mat["hyperelastic"][3]]
-        lsdyna["t_mid_ogden"]["mu3"]    += [2 * mat["hyperelastic"][4] / mat["hyperelastic"][5]]
+        lsdyna["t_mid_ogden"]["mu3"]    += [2 * mat["hyperelastic"][4] / mat["hyperelastic"][5] / 1000000]
         lsdyna["t_mid_ogden"]["alpha3"] += [mat["hyperelastic"][5]]
     else:
         lsdyna["t_mid"]["type"]           += ["elastic"]
@@ -505,14 +505,14 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
             else:
                 total_time += step_time
     
-    lsdyna["t_lcid_time"]["lcid"] += [lcid]
-    lsdyna["t_lcid_time"]["a1"]   += [total_time + 0.1]
-    lsdyna["t_lcid_time"]["o1"]   += [value]
+    # lsdyna["t_lcid_time"]["lcid"] += [lcid]
+    # lsdyna["t_lcid_time"]["a1"]   += [total_time + 0.1]
+    # lsdyna["t_lcid_time"]["o1"]   += [value]
 
     nset = abaqus["t_nset_component"][abaqus["t_nset_component"]["nset_name"] == boundary.nset_name]            
     if boundary.transform_type == "C":
         if not boundary.nset_name in lsdyna["t_id"]["title"]:
-            dof = ((abaqus["q_history_component"]["nset_name"] == boundary.nset_name) & (abaqus["q_history_component"]["freedom"] == "3")).any()
+            dof_c = ((abaqus["q_history_component"]["nset_name"] == boundary.nset_name) & (abaqus["q_history_component"]["freedom"] == "3")).any()
             for index, node in nset.iterrows():
                 vid = len(lsdyna["t_vid"]["vid"]) + 1
                 lsdyna["t_vid"]["vid"]            += [vid]
@@ -525,17 +525,18 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
 
                 id = len(lsdyna["t_id"]["id"]) + 1
                 lsdyna["t_id"]["id"]             += [id]
-                lsdyna["t_id"]["title"]          += ["(" + str(boundary.freedom) + ")" + str(boundary.nset_name)]
+                lsdyna["t_id"]["title"]          += [boundary.nset_name]
                 lsdyna["t_id"]["type"]           += ["node"]
 
                 lsdyna["t_id_node"]["id"]        += [id]
                 lsdyna["t_id_node"]["nid"]       += [node.node_id]
 
-                if dof:
+                # lsdyna["t_id_node"]["dof"]   += [-4]
+                if dof_c:
                     lsdyna["t_id_node"]["dof"]   += [-4]
                 else:
                     lsdyna["t_id_node"]["dof"]   += [4]
-
+                
                 lsdyna["t_id_node"]["vad"]       += [2]
                 lsdyna["t_id_node"]["lcid"]      += [lcid]    
                 lsdyna["t_id_node"]["vid"]       += [vid]
@@ -553,9 +554,8 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
             #RIGIDの場合
             id = len(lsdyna["t_id"]["id"]) + 1
             lsdyna["t_id"]["id"]                       += [id]
-            lsdyna["t_id"]["title"]                    += ["(" + str(boundary.freedom) + ")" + str(boundary.nset_name)]
+            lsdyna["t_id"]["title"]                    += [boundary.nset_name]
             lsdyna["t_id"]["type"]                     += ["node"]
-
             lsdyna["t_id_node"]["id"]                  += [id]
             lsdyna["t_id_node"]["nid"]                 += [int(nset.iloc[0]["node_id"])]
             lsdyna["t_id_node"]["dof"]                 += [dof]
@@ -567,7 +567,7 @@ for index, boundary in abaqus["q_history_component"].groupby(["nset_name", "free
         else:
             id = len(lsdyna["t_id"]["id"]) + 1
             lsdyna["t_id"]["id"]                           += [id]
-            lsdyna["t_id"]["title"]                        += ["(" + str(boundary.freedom) + ")" + str(boundary.nset_name)]
+            lsdyna["t_id"]["title"]                        += [boundary.nset_name]
             lsdyna["t_id"]["type"]                         += ["set_node"]
             
             #SET_NODEを作成する
@@ -650,7 +650,7 @@ with open(output_path, mode='w') as f:
     f.write('{0:0< #10f}'.format(0.9))      #tssfac
     f.write('{0: > #10}'.format(0))         #isdo
     f.write('{0:0< #10f}'.format(0))        #tslimt
-    f.write('{0: > #10}'.format(float(abaqus["t_mass_scaling"]["dt"].max()))) #dt2ms
+    f.write('{0: > #10}'.format(float(abaqus["t_mass_scaling"]["dt"].max()) * -1)) #dt2ms
     f.write('{0: > #10}'.format(0))         #lctm
     f.write('{0: > #10}'.format(0))         #erode
     f.write('{0: > #10}'.format(0))         #ms1st
@@ -829,12 +829,14 @@ with open(output_path, mode='w') as f:
             f.write('{: <10}'.format(""))           #bt
             f.write('{: <10}'.format(""))           #dt
             f.write("\n")
-            f.write('{: <10}'.format(""))           #soft
-            f.write('{: <10}'.format(""))           #sofscl
-            f.write('{: <10}'.format(""))           #lcidab
-            f.write('{: <10}'.format(""))           #maxpar
-            f.write('{: <10}'.format(""))           #sbopt
-            f.write('{: <10}'.format(""))           #depth
+            f.write('{: <10}'.format(""))           #sfs
+            f.write('{: <10}'.format(""))           #sfm
+            f.write('{: <10}'.format(""))           #sst
+            f.write('{: <10}'.format(""))           #mst
+            f.write('{: <10}'.format(""))           #sfst
+            f.write('{: <10}'.format(""))           #sfmt
+            f.write('{: <10}'.format(""))           #fsf
+            f.write('{: <10}'.format(""))           #vsf
             f.write("\n")
 
     df = lsdyna["t_sid"]
@@ -844,11 +846,11 @@ with open(output_path, mode='w') as f:
             f.write("*SET_SEGMENT_TITLE\n")
             f.write('{: <80}'.format(tmp["title"][idx]) + "\n")  
             f.write('{0: > #10}'.format(tmp["sid"][idx]))   #sid
-            f.write('{: <10}'.format(""))           #da1
-            f.write('{: <10}'.format(""))           #da2
-            f.write('{: <10}'.format(""))           #da3
-            f.write('{: <10}'.format(""))           #da4
-            f.write('{: <10}'.format(""))           #solver
+            f.write('{: <10}'.format(""))                   #da1
+            f.write('{: <10}'.format(""))                   #da2
+            f.write('{: <10}'.format(""))                   #da3
+            f.write('{: <10}'.format(""))                   #da4
+            f.write('{: <10}'.format(""))                   #solver
             f.write("\n")
             element_id = 0
 
@@ -885,8 +887,8 @@ with open(output_path, mode='w') as f:
     
     df = pd.merge(lsdyna["t_id_set_node"], lsdyna["t_id"], on='id', how='left')
     tmp = set_default(df)
+    f.write("*BOUNDARY_PRESCRIBED_MOTION_SET_ID\n")
     for idx in range(df.shape[0]):
-        f.write("*BOUNDARY_PRESCRIBED_MOTION_SET_ID\n")
         f.write('{0: > #10}'.format(tmp["id"][idx]))
         f.write(tmp["title"][idx] + "\n")
         f.write('{0: > #10}'.format(tmp["sid"][idx]))
@@ -895,12 +897,14 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(tmp["lcid"][idx]))
         f.write('{: <10}'.format(""))
         f.write('{0: > #10}'.format(tmp["vid"][idx]))
+        f.write('{0: > #10}'.format(tmp["death"][idx]))
+        f.write('{0: > #10}'.format(tmp["birth"][idx]))
         f.write("\n")
 
     df = pd.merge(lsdyna["t_id_node"], lsdyna["t_id"], on='id', how='left')
     tmp = set_default(df)
+    f.write("*BOUNDARY_PRESCRIBED_MOTION_NODE_ID\n")
     for idx in range(df.shape[0]):
-        f.write("*BOUNDARY_PRESCRIBED_MOTION_NODE_ID\n")
         f.write('{0: > #10}'.format(tmp["id"][idx]))
         f.write(tmp["title"][idx] + "\n")
         f.write('{0: > #10}'.format(tmp["nid"][idx]))
@@ -909,11 +913,13 @@ with open(output_path, mode='w') as f:
         f.write('{0: > #10}'.format(tmp["lcid"][idx]))
         f.write('{: <10}'.format(""))
         f.write('{0: > #10}'.format(tmp["vid"][idx]))
+        f.write('{0: > #10}'.format(tmp["death"][idx]))
+        f.write('{0: > #10}'.format(tmp["birth"][idx]))
         f.write("\n")
 
     tmp = set_default(lsdyna["t_vid"])
+    f.write("*DEFINE_VECTOR\n") 
     for idx in range(lsdyna["t_vid"].shape[0]):
-        f.write("*DEFINE_VECTOR\n") 
         f.write('{0: > #10}'.format(int(tmp["vid"][idx])))
         f.write('{0:0< #10f}'.format(tmp["xt"][idx]))
         f.write('{0:0< #10f}'.format(tmp["yt"][idx]))
